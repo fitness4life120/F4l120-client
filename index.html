@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -521,6 +521,17 @@ const fileToBase64 = (file) => new Promise((resolve,reject) => {
   r.readAsDataURL(file);
 });
 
+function getWeekDates(dateStr){
+  const d = new Date(dateStr+"T12:00:00");
+  const dow = d.getDay();
+  const diffToMon = dow===0?-6:1-dow;
+  const monday = new Date(d); monday.setDate(d.getDate()+diffToMon);
+  return Array.from({length:7},(_,i)=>{
+    const dd = new Date(monday); dd.setDate(monday.getDate()+i);
+    return dd.toISOString().slice(0,10);
+  });
+}
+
 function nDayLabel(dateStr){
   const t = tod();
   if(dateStr===t) return "Today";
@@ -618,6 +629,29 @@ function FoodTab({client, toast_}){
   const fatGoal = client.fat || 60;
   const calPct = Math.min((totals.calories/calGoal)*100,100);
 
+  // Weekly averages (Mon-Sun week containing nDate)
+  const weekDates = getWeekDates(nDate);
+  const weekLogsAll = nLogs.filter(l=>weekDates.includes(l.date));
+  const dayGroups = weekDates.map(d=>weekLogsAll.filter(l=>l.date===d));
+  const loggedDayGroups = dayGroups.filter(g=>g.length>0);
+  const wTotals = loggedDayGroups.reduce((acc,g)=>{
+    const dt = g.reduce((a,m)=>{
+      a.calories+=(+m.calories||0); a.protein_g+=(+m.protein_g||0);
+      a.carbs_g+=(+m.carbs_g||0); a.fat_g+=(+m.fat_g||0);
+      return a;
+    },{calories:0,protein_g:0,carbs_g:0,fat_g:0});
+    acc.calories+=dt.calories; acc.protein_g+=dt.protein_g;
+    acc.carbs_g+=dt.carbs_g; acc.fat_g+=dt.fat_g;
+    return acc;
+  },{calories:0,protein_g:0,carbs_g:0,fat_g:0});
+  const loggedCount = loggedDayGroups.length;
+  const avgCal = loggedCount ? Math.round(wTotals.calories/loggedCount) : 0;
+  const avgPro = loggedCount ? Math.round(wTotals.protein_g/loggedCount) : 0;
+  const avgCarb = loggedCount ? Math.round(wTotals.carbs_g/loggedCount) : 0;
+  const avgFat = loggedCount ? Math.round(wTotals.fat_g/loggedCount) : 0;
+  const wLabel = new Date(weekDates[0]+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})
+    + " – " + new Date(weekDates[6]+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"});
+
   return (
     <div className="scroll">
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
@@ -642,6 +676,28 @@ function FoodTab({client, toast_}){
           <MacroBox label="Fat" value={totals.fat_g} goal={fatGoal} color="#ef9a9a"/>
           <MacroBox label="Fiber" value={totals.fiber_g} goal={null} color="#a5d6a7"/>
         </div>
+      </div>
+
+      <div className="card">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div className="clbl" style={{marginBottom:0}}>This Week</div>
+          <span style={{fontSize:11,color:"var(--muted)"}}>{wLabel}</span>
+        </div>
+        {loggedCount===0 ? (
+          <div style={{color:"var(--muted)",fontSize:12,fontStyle:"italic"}}>No meals logged this week yet</div>
+        ) : (
+          <>
+            <div style={{textAlign:"center",marginBottom:10}}>
+              <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:26,fontWeight:900,color:"var(--teal2)"}}>{avgCal}</div>
+              <div style={{fontSize:11,color:"var(--muted)"}}>avg kcal/day · {loggedCount} of 7 days logged</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              <MacroBox label="Avg Protein" value={avgPro} goal={null} color="#4fc3f7"/>
+              <MacroBox label="Avg Carbs" value={avgCarb} goal={null} color="#ffd54f"/>
+              <MacroBox label="Avg Fat" value={avgFat} goal={null} color="#ef9a9a"/>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="card">
