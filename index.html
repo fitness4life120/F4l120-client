@@ -500,7 +500,10 @@ const analyzeMealText = async (description) => {
 };
 
 const analyzeMealPhoto = async (base64, mediaType, captionText) => {
-  const instructions = `Look at this meal photo${captionText?` (the person also noted: "${captionText}")`:""} and estimate the nutrition facts. Use the plate, portion sizes, and visible ingredients to judge quantities as accurately as possible.`;
+  const instructions = `Look at this photo${captionText?` (the person also noted: "${captionText}")`:""}. First determine what kind of photo this is, then respond accordingly:
+- If it is a Nutrition Facts label or ingredients panel: read the exact printed values per serving (calories, protein, carbs, fat, fiber). If the note above specifies a quantity or number of servings eaten, scale the printed values accordingly; otherwise use the printed single-serving values exactly as shown — do not estimate or round differently than what's printed.
+- If it is a plate or photo of food (not a label): estimate the nutrition facts using the plate, portion sizes, and visible ingredients to judge quantities as accurately as possible.
+Use whichever approach actually fits what's in the photo.`;
   const res = await fetch(NUTRITION_PROXY_URL, {
     method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:1000,
@@ -722,6 +725,7 @@ function FoodTab({client, toast_}){
           ) : (
             <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:130,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)",marginBottom:10}}>
               <div style={{fontSize:12,fontWeight:600}}>Tap to take or upload a photo</div>
+              <div style={{fontSize:10,color:"var(--muted)",marginTop:2}}>of your meal or a nutrition label</div>
               <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>onPhotoSelected(e.target.files[0])}/>
             </label>
           )
