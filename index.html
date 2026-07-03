@@ -50,7 +50,7 @@ body{font-family:'Cabinet Grotesk',sans-serif;color:var(--txt)}
 .icon-btn:active{transform:scale(0.9)}
 .tabbar{display:flex;overflow-x:auto}
 .tabbar::-webkit-scrollbar{display:none}
-.tab{flex:1;min-width:52px;padding:9px 4px;background:transparent;border:none;border-bottom:2px solid transparent;font-family:'Clash Display',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);cursor:pointer;white-space:nowrap}
+.tab{flex:0 0 auto;min-width:56px;padding:9px 10px;background:transparent;border:none;border-bottom:2px solid transparent;font-family:'Clash Display',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);cursor:pointer;white-space:nowrap}
 .tab.active{color:var(--teal2);border-bottom-color:var(--teal2)}
 .scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 100px}
 .scroll::-webkit-scrollbar{display:none}
@@ -155,7 +155,7 @@ const api = async (path, opts={}) => {
 
 const MUSCLES = ["Chest","Back","Shoulders","Biceps","Triceps","Legs","Glutes","Core","Cardio","Full Body"];
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const tod = () => new Date().toISOString().slice(0,10);
+const tod = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
 const fmt = d => new Date(d+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
 const greeting = () => { const h=new Date().getHours(); return h<12?"Good morning":h<17?"Good afternoon":"Good evening"; };
 const sl = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v));}catch{} };
@@ -251,7 +251,7 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
   const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const today = new Date().toISOString().slice(0,10);
+  const today = tod();
 
   const first = new Date(calYear,calMonth,1).getDay();
   const daysInMonth = new Date(calYear,calMonth+1,0).getDate();
