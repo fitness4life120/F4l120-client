@@ -156,6 +156,33 @@ const api = async (path, opts={}) => {
 const MUSCLES = ["Chest","Back","Shoulders","Biceps","Triceps","Legs","Glutes","Core","Cardio","Full Body"];
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const tod = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
+
+function getYouTubeId(url){
+  if(!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function ExerciseVideo({url}){
+  const [open,setOpen] = useState(false);
+  const vid = getYouTubeId(url);
+  if(!vid) return null;
+  if(!open) return (
+    <button onClick={()=>setOpen(true)} style={{display:"flex",alignItems:"center",gap:4,background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"5px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Barlow Condensed",letterSpacing:0.5,flexShrink:0}}>
+      ▶ Watch
+    </button>
+  );
+  return (
+    <div style={{gridColumn:"1 / -1",marginTop:8,borderRadius:8,overflow:"hidden",position:"relative",paddingBottom:"56.25%",height:0}}>
+      <iframe
+        src={`https://www.youtube.com/embed/${vid}?autoplay=1`}
+        style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  );
+}
 const fmt = d => new Date(d+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
 const greeting = () => { const h=new Date().getHours(); return h<12?"Good morning":h<17?"Good afternoon":"Good evening"; };
 const sl = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v));}catch{} };
@@ -247,7 +274,7 @@ function drawLineChart(canvasId, data, color) {
 
 const CHART_COLORS = ["#22a8be","#C9A84C","#2dba80","#e07a52","#a86bcc","#52b0e0"];
 
-function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelDate,datedPlans,plans,logPlanEx,addEx,ef,setEf,sAE,setSAE,logs}) {
+function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelDate,datedPlans,plans,logPlanEx,addEx,ef,setEf,sAE,setSAE,logs,exerciseVideos}) {
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
   const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -347,12 +374,14 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
 
           {activePlan&&(activePlan.exercises||[]).map((ex,i)=>{
             const done = logs.some(l=>l.date===selDate&&l.exercise===ex.name);
+            const vidUrl = exerciseVideos&&exerciseVideos[ex.name];
             return(
-              <div key={i} style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",alignItems:"center",gap:8}}>
+              <div key={i} style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}</div>
                   <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps} reps{ex.muscle?" · "+ex.muscle:""}</div>
                 </div>
+                {vidUrl&&<ExerciseVideo url={vidUrl}/>}
                 {done
                   ?<span style={{fontSize:11,color:"var(--green)",fontWeight:700}}>✓ Done</span>
                   :<button onClick={()=>logFromPlan(ex)} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Barlow Condensed",letterSpacing:0.5}}>Log It</button>
@@ -806,6 +835,7 @@ function App(){
   const [calYear,setCalYear]   = useState(new Date().getFullYear());
   const [selDate,setSelDate]   = useState(new Date().toISOString().slice(0,10));
   const [trainerNote,setTNote] = useState("");
+  const [exerciseVideos,setExerciseVideos] = useState({});
 
   const [sAE,setSAE]   = useState(false);
   const [sProg,setSProg] = useState(false);
@@ -824,6 +854,15 @@ function App(){
   useEffect(()=>{
     const saved = ll("f4l_client_id");
     if(saved) loadClientById(saved);
+  },[]);
+
+  // Load exercise demo video links (global, not client-specific)
+  useEffect(()=>{
+    api(`exercise_videos?select=exercise_name,youtube_url`).then(rows=>{
+      const map = {};
+      (rows||[]).forEach(r=>{ map[r.exercise_name] = r.youtube_url; });
+      setExerciseVideos(map);
+    }).catch(()=>{});
   },[]);
 
   const loadClientById = async (id) => {
@@ -1102,7 +1141,7 @@ function App(){
             datedPlans={datedPlans} plans={plans}
             logPlanEx={logPlanEx} addEx={addEx}
             ef={ef} setEf={setEf} sAE={sAE} setSAE={setSAE}
-            logs={logs}
+            logs={logs} exerciseVideos={exerciseVideos}
           />
         </div>
       )}
