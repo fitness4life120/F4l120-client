@@ -163,6 +163,17 @@ function getYouTubeId(url){
   return m ? m[1] : null;
 }
 
+function getExercisePR(logs, exerciseName){
+  let best = null;
+  (logs||[]).forEach(l=>{
+    if(l.exercise!==exerciseName) return;
+    const w = +l.weight||0;
+    if(w<=0) return;
+    if(!best || w>best.weight) best = {weight:w, reps:l.reps};
+  });
+  return best;
+}
+
 function ExerciseVideo({url}){
   const [open,setOpen] = useState(false);
   const vid = getYouTubeId(url);
@@ -375,11 +386,13 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
           {activePlan&&(activePlan.exercises||[]).map((ex,i)=>{
             const done = logs.some(l=>l.date===selDate&&l.exercise===ex.name);
             const vidUrl = exerciseVideos&&exerciseVideos[ex.name];
+            const pr = getExercisePR(logs, ex.name);
             return(
               <div key={i} style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}</div>
                   <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps} reps{ex.muscle?" · "+ex.muscle:""}</div>
+                  {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}</div>}
                 </div>
                 {vidUrl&&<ExerciseVideo url={vidUrl}/>}
                 {done
