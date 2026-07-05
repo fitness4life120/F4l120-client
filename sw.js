@@ -6,7 +6,7 @@ self.addEventListener('install', function(event) {
 });
 
 self.addEventListener('activate', function(event) {
-  event.waitUntil(self.clients.claim()); 
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('push', function(event) {
@@ -20,8 +20,8 @@ self.addEventListener('push', function(event) {
   const title = data.title || 'Fitness 4Life 120';
   const options = {
     body: data.body || '',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
     data: { url: data.url || '/' }
   };
 
