@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -912,6 +912,16 @@ function MessagesTab({client, messages, setMessages, toast_}){
     else if(res.reason==="denied") { setPushState("denied"); }
     else { toast_("Could not enable: "+res.reason+(res.message?" ("+res.message+")":"")); }
   };
+
+  useEffect(()=>{
+    if(!client) return;
+    // If permission was already granted previously, make sure a subscription row
+    // actually exists in the database — it may not (e.g. if the table didn't exist
+    // yet the first time permission was granted). Silent, no toast either way.
+    if(pushSupported() && !(isIOS()&&!isStandalone()) && typeof Notification!=="undefined" && Notification.permission==="granted"){
+      subscribeToPush(client.id);
+    }
+  },[client?.id]);
 
   useEffect(()=>{
     if(!client) return;
