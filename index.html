@@ -200,7 +200,7 @@ async function subscribeToPush(clientId){
       // endpoint already exists (unique constraint) — fine, subscription is already registered
     });
     return { ok:true };
-  } catch(e){ return { ok:false, reason:"subscribe_failed" }; }
+  } catch(e){ return { ok:false, reason:"subscribe_failed", message: (e && e.message) || String(e) }; }
 }
 
 function getYouTubeId(url){
@@ -910,7 +910,7 @@ function MessagesTab({client, messages, setMessages, toast_}){
     const res = await subscribeToPush(client.id);
     if(res.ok) { setPushState("enabled"); toast_("Notifications enabled ✓"); }
     else if(res.reason==="denied") { setPushState("denied"); }
-    else { toast_("Could not enable notifications"); }
+    else { toast_("Could not enable: "+res.reason+(res.message?" ("+res.message+")":"")); }
   };
 
   useEffect(()=>{
