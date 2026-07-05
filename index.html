@@ -199,8 +199,10 @@ const greeting = () => { const h=new Date().getHours(); return h<12?"Good mornin
 const sl = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v));}catch{} };
 const ll = k => { try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;} };
 
-function ExRow({e,onDel}){
+function ExRow({e,onDel,exerciseVideos,logs}){
   const vol=(+e.sets||0)*(+e.reps||0)*(+e.weight||0);
+  const vidUrl = exerciseVideos&&exerciseVideos[e.exercise];
+  const pr = getExercisePR(logs, e.exercise);
   return(
     <div className="ex-row">
       <div className="ex-top">
@@ -214,7 +216,9 @@ function ExRow({e,onDel}){
         {e.sets&&<span className="chip">{e.sets}×{e.reps||"?"}</span>}
         {vol>0&&<span className="chip" style={{fontSize:9,color:"var(--muted)"}}>{vol.toLocaleString()} vol</span>}
         {e.notes&&<span style={{fontSize:10,color:"var(--soft)",fontStyle:"italic"}}>{e.notes}</span>}
+        {vidUrl&&<ExerciseVideo url={vidUrl}/>}
       </div>
+      {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:4,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}</div>}
     </div>
   );
 }
@@ -1138,7 +1142,7 @@ function App(){
           {todayLogs.length>0&&(
             <>
               <div className="dh"><span className="dl">Today</span><div className="dline"/><span className="dc">{todayLogs.length}</span></div>
-              {todayLogs.map(e=><ExRow key={e.id} e={e} onDel={()=>delEx(e.id)}/>)}
+              {todayLogs.map(e=><ExRow key={e.id} e={e} onDel={()=>delEx(e.id)} exerciseVideos={exerciseVideos} logs={logs}/>)}
             </>
           )}
         </div>
@@ -1172,7 +1176,7 @@ function App(){
             :sdates.map(d=>(
               <div key={d}>
                 <div className="dh"><span className="dl">{fmt(d)}</span><div className="dline"/><span className="dc">{grp[d].length}</span></div>
-                {grp[d].map(e=><ExRow key={e.id} e={e} onDel={()=>delEx(e.id)}/>)}
+                {grp[d].map(e=><ExRow key={e.id} e={e} onDel={()=>delEx(e.id)} exerciseVideos={exerciseVideos} logs={logs}/>)}
               </div>
             ))
           }
