@@ -838,6 +838,77 @@ function FoodTab({client, toast_}){
   );
 }
 
+function timeAgoShort(iso){
+  const mins = Math.floor((new Date() - new Date(iso)) / 60000);
+  if(mins<1) return "now";
+  if(mins<60) return mins+"m";
+  const hrs = Math.floor(mins/60);
+  if(hrs<24) return hrs+"h";
+  const days = Math.floor(hrs/24);
+  if(days<7) return days+"d";
+  return new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+}
+
+function MessagesTab({client, messages, setMessages, toast_}){
+  const [body,setBody] = useState("");
+  const bottomRef = useRef(null);
+
+  useEffect(()=>{
+    if(!client) return;
+    const unread = messages.filter(m=>m.sender==="trainer"&&!m.read_at);
+    if(!unread.length) return;
+    const now = new Date().toISOString();
+    setMessages(prev=>prev.map(m=>(m.sender==="trainer"&&!m.read_at)?{...m,read_at:now}:m));
+    api(`messages?thread_client_id=eq.${client.id}&sender=eq.trainer&read_at=is.null`,{method:"PATCH",body:JSON.stringify({read_at:now})}).catch(()=>{});
+  },[client?.id]);
+
+  useEffect(()=>{
+    if(bottomRef.current) bottomRef.current.scrollIntoView({block:"end"});
+  },[messages.length]);
+
+  const send = async () => {
+    const text = body.trim();
+    if(!text || !client) return;
+    setBody("");
+    try {
+      const saved = await api("messages",{method:"POST",body:JSON.stringify({thread_client_id:client.id,sender:"client",body:text})});
+      if(saved&&saved[0]) setMessages(prev=>[...prev,saved[0]]);
+    } catch(e){ toast_("Could not send message"); }
+  };
+
+  const sorted = [...messages].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+
+  return (
+    <div className="scroll" style={{display:"flex",flexDirection:"column",height:"100%"}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+        {sorted.length===0 ? (
+          <div className="empty"><span className="ei">💬</span>No messages yet — send Coach Steve a message anytime</div>
+        ) : sorted.map(m=>{
+          const isMe = m.sender==="client";
+          return (
+            <div key={m.id} style={{alignSelf:isMe?"flex-end":"flex-start",maxWidth:"80%"}}>
+              {m.broadcast_label&&<div style={{fontSize:9,color:"var(--gold)",marginBottom:2,textAlign:isMe?"right":"left"}}>Sent to: {m.broadcast_label}</div>}
+              <div style={{background:isMe?"linear-gradient(135deg,#186476,var(--teal))":"var(--s2)",color:isMe?"#fff":"var(--txt)",border:"1px solid "+(isMe?"transparent":"var(--b1)"),borderRadius:12,padding:"9px 13px",fontSize:13,lineHeight:1.4,whiteSpace:"pre-wrap"}}>{m.body}</div>
+              <div style={{fontSize:9,color:"var(--muted)",marginTop:3,textAlign:isMe?"right":"left"}}>{timeAgoShort(m.created_at)}</div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef}/>
+      </div>
+      <div style={{position:"sticky",bottom:0,background:"var(--bg)",paddingTop:8,display:"flex",gap:8}}>
+        <textarea
+          placeholder="Message Coach Steve…"
+          value={body}
+          onChange={e=>setBody(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); } }}
+          style={{flex:1,background:"var(--s2)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:14,outline:"none",resize:"none",minHeight:44,maxHeight:100}}
+        />
+        <button onClick={send} style={{background:"linear-gradient(135deg,#186476,var(--teal))",color:"#fff",border:"none",borderRadius:8,padding:"0 18px",fontWeight:700,cursor:"pointer"}}>Send</button>
+      </div>
+    </div>
+  );
+}
+
 function App(){
   const [client,setClient]   = useState(null);
   const [loading,setLoading] = useState(false);
@@ -853,6 +924,8 @@ function App(){
   const [selDate,setSelDate]   = useState(new Date().toISOString().slice(0,10));
   const [trainerNote,setTNote] = useState("");
   const [exerciseVideos,setExerciseVideos] = useState({});
+  const [messages,setMessages] = useState([]);
+  const [msgBody,setMsgBody] = useState("");
 
   const [sAE,setSAE]   = useState(false);
   const [sProg,setSProg] = useState(false);
@@ -892,11 +965,13 @@ function App(){
         api(`workout_plans?client_id=eq.${id}&order=day.asc`),
         api(`dated_plans?client_id=eq.${id}&order=date.asc`),
         api(`trainer_notes?client_id=eq.${id}&order=created_at.desc&limit=1`),
+        api(`messages?thread_client_id=eq.${id}&order=created_at.asc`),
       ]);
-      const [c,l,pr,pl,dp,tn] = results;
+      const [c,l,pr,pl,dp,tn,msgs] = results;
       if(c.length){
         setClient(c[0]); setLogs(l); setProg(pr); setPlans(pl); setDatedPlans(dp||[]);
         setTNote(tn[0]?.message||"");
+        setMessages(msgs||[]);
         sl("f4l_client_id",id);
       }
     } catch(e){setPinErr("Could not connect. Check your connection.");}
@@ -1096,11 +1171,15 @@ function App(){
           </div>
         </div>
         <div className="tabbar">
-          {["today","plan","log","food","progress","stats"].map(v=>(
-            <button key={v} className={`tab ${view===v?"active":""}`} onClick={()=>setView(v)}>
-              {v==="today"?"Today":v==="plan"?"My Plan":v[0].toUpperCase()+v.slice(1)}
-            </button>
-          ))}
+          {["today","plan","log","food","messages","progress","stats"].map(v=>{
+            const unread = v==="messages" ? messages.filter(m=>m.sender==="trainer"&&!m.read_at).length : 0;
+            return (
+              <button key={v} className={`tab ${view===v?"active":""}`} onClick={()=>setView(v)}>
+                {v==="today"?"Today":v==="plan"?"My Plan":v[0].toUpperCase()+v.slice(1)}
+                {unread>0&&<span style={{display:"inline-block",marginLeft:4,background:"var(--red)",color:"#fff",fontSize:9,fontWeight:800,borderRadius:8,padding:"1px 5px"}}>{unread}</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -1186,6 +1265,11 @@ function App(){
       {/* FOOD */}
       {view==="food"&&(
         <FoodTab client={client} toast_={toast_}/>
+      )}
+
+      {/* MESSAGES */}
+      {view==="messages"&&(
+        <MessagesTab client={client} messages={messages} setMessages={setMessages} toast_={toast_}/>
       )}
 
       {/* PROGRESS */}
@@ -1293,11 +1377,15 @@ function App(){
       {view==="progress"&&<button className="fab" onClick={()=>setSProg(true)}>＋</button>}
 
       <div className="bnav">
-        {[{id:"today",i:"🌅",l:"Today"},{id:"plan",i:"📋",l:"Plan"},{id:"log",i:"🏋️",l:"Log"},{id:"food",i:"🍽️",l:"Food"},{id:"progress",i:"📈",l:"Progress"},{id:"stats",i:"🏆",l:"Stats"}].map(n=>(
-          <button key={n.id} className={`bb ${view===n.id?"active":""}`} onClick={()=>setView(n.id)}>
+        {[{id:"today",i:"🌅",l:"Today"},{id:"plan",i:"📋",l:"Plan"},{id:"log",i:"🏋️",l:"Log"},{id:"food",i:"🍽️",l:"Food"},{id:"messages",i:"💬",l:"Messages"},{id:"progress",i:"📈",l:"Progress"},{id:"stats",i:"🏆",l:"Stats"}].map(n=>{
+          const unread = n.id==="messages" ? messages.filter(m=>m.sender==="trainer"&&!m.read_at).length : 0;
+          return (
+          <button key={n.id} className={`bb ${view===n.id?"active":""}`} onClick={()=>setView(n.id)} style={{position:"relative"}}>
+            {unread>0&&<span style={{position:"absolute",top:2,right:"calc(50% - 20px)",background:"var(--red)",color:"#fff",fontSize:9,fontWeight:800,borderRadius:8,padding:"1px 5px"}}>{unread}</span>}
             <span className="bi">{n.i}</span>{n.l}
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* LOG EXERCISE */}
