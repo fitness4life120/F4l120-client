@@ -1,5 +1,5 @@
 // Service worker for F4L120 client app push notifications.
-// Must live at the ROOT of the site (same folder as index.html) so its scope covers the whole app.
+// Must live at the ROOT of the site (same folder as index.html) so its scope covers the whole app. 
 
 self.addEventListener('install', function(event) {
   self.skipWaiting();
