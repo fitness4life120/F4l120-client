@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -156,6 +156,52 @@ const api = async (path, opts={}) => {
 const MUSCLES = ["Chest","Back","Shoulders","Biceps","Triceps","Legs","Glutes","Core","Cardio","Full Body"];
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const tod = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
+
+// ── PUSH NOTIFICATIONS ──
+const VAPID_PUBLIC_KEY = "BHUaZxVNGZJuE1gaFt8Uuzi50KyFmv6UWaoyfmhzvfbBvkGUneK5wTKwkuLEZnmOltf5OKoPzQzpXdi8J1GTKz8";
+
+function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream; }
+function isStandalone(){ return window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches; }
+function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window; }
+
+function urlBase64ToUint8Array(base64String){
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g,"+").replace(/_/g,"/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for(let i=0;i<rawData.length;i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function registerServiceWorker(){
+  if(!("serviceWorker" in navigator)) return null;
+  try { return await navigator.serviceWorker.register("/sw.js"); }
+  catch(e){ return null; }
+}
+
+async function subscribeToPush(clientId){
+  if(!pushSupported()) return { ok:false, reason:"unsupported" };
+  const reg = await registerServiceWorker();
+  if(!reg) return { ok:false, reason:"sw_failed" };
+  const permission = await Notification.requestPermission();
+  if(permission !== "granted") return { ok:false, reason:"denied" };
+  try {
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    const raw = sub.toJSON();
+    await api("push_subscriptions", { method:"POST", body: JSON.stringify({
+      client_id: clientId, endpoint: raw.endpoint, p256dh: raw.keys.p256dh, auth: raw.keys.auth
+    })}).catch(()=>{
+      // endpoint already exists (unique constraint) — fine, subscription is already registered
+    });
+    return { ok:true };
+  } catch(e){ return { ok:false, reason:"subscribe_failed" }; }
+}
 
 function getYouTubeId(url){
   if(!url) return null;
@@ -851,7 +897,21 @@ function timeAgoShort(iso){
 
 function MessagesTab({client, messages, setMessages, toast_}){
   const [body,setBody] = useState("");
+  const [pushState,setPushState] = useState(()=>{
+    if(!pushSupported()) return "unsupported";
+    if(isIOS() && !isStandalone()) return "ios_needs_install";
+    if(typeof Notification!=="undefined" && Notification.permission==="granted") return "enabled";
+    if(typeof Notification!=="undefined" && Notification.permission==="denied") return "denied";
+    return "promptable";
+  });
   const bottomRef = useRef(null);
+
+  const enableNotifications = async () => {
+    const res = await subscribeToPush(client.id);
+    if(res.ok) { setPushState("enabled"); toast_("Notifications enabled ✓"); }
+    else if(res.reason==="denied") { setPushState("denied"); }
+    else { toast_("Could not enable notifications"); }
+  };
 
   useEffect(()=>{
     if(!client) return;
@@ -880,6 +940,22 @@ function MessagesTab({client, messages, setMessages, toast_}){
 
   return (
     <div className="scroll" style={{display:"flex",flexDirection:"column",height:"100%"}}>
+      {pushState==="promptable"&&(
+        <div style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:"10px 12px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+          <span style={{fontSize:12,color:"var(--teal2)"}}>Get notified when Coach Steve messages you</span>
+          <button onClick={enableNotifications} style={{background:"var(--teal)",color:"#fff",border:"none",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>Enable</button>
+        </div>
+      )}
+      {pushState==="ios_needs_install"&&(
+        <div style={{background:"var(--gold2)",border:"1px solid rgba(201,168,76,0.3)",borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:12,color:"var(--gold)"}}>
+          To get notified of new messages on iPhone: tap the Share button in Safari, then "Add to Home Screen." Notifications only work once the app is added there.
+        </div>
+      )}
+      {pushState==="denied"&&(
+        <div style={{background:"var(--s2)",border:"1px solid var(--b1)",borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:12,color:"var(--muted)"}}>
+          Notifications are blocked. You can re-enable them in your browser/phone settings for this app.
+        </div>
+      )}
       <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
         {sorted.length===0 ? (
           <div className="empty"><span className="ei">💬</span>No messages yet — send Coach Steve a message anytime</div>
@@ -939,6 +1015,9 @@ function App(){
   const pinRefs = [useRef(),useRef(),useRef(),useRef()];
 
   const toast_ = m => {setToast(m);setTimeout(()=>setToast(null),2400);};
+
+  // Register service worker for push notifications (safe no-op if unsupported)
+  useEffect(()=>{ registerServiceWorker(); },[]);
 
   // Auto-login from localStorage
   useEffect(()=>{
