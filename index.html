@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -390,8 +390,8 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
             return(
               <div key={i} style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}</div>
-                  <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps} reps{ex.muscle?" · "+ex.muscle:""}</div>
+                  <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}{ex.type==="time"&&<span style={{fontSize:9,color:"var(--gold)",background:"rgba(201,168,76,0.15)",borderRadius:3,padding:"1px 5px",marginLeft:4}}>TIME</span>}</div>
+                  <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
                   {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}</div>}
                 </div>
                 {vidUrl&&<ExerciseVideo url={vidUrl}/>}
