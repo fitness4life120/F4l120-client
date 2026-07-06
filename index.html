@@ -417,6 +417,43 @@ function drawLineChart(canvasId, data, color) {
 
 const CHART_COLORS = ["#22a8be","#C9A84C","#2dba80","#e07a52","#a86bcc","#52b0e0"];
 
+function groupExercisesByField(exercises){
+  const result = [];
+  const seen = {};
+  exercises.forEach(ex=>{
+    if(!ex.group){ result.push({type:"single", ex}); return; }
+    if(seen[ex.group]){
+      const entry = result.find(r=>r.type==="group"&&r.groupId===ex.group);
+      if(entry) entry.exercises.push(ex);
+      return;
+    }
+    seen[ex.group]=true;
+    result.push({type:"group", groupId:ex.group, exercises:[ex]});
+  });
+  result.forEach(r=>{ if(r.type==="group") r.label=(r.exercises.length>=3?"Circuit ":"Superset ")+r.groupId; });
+  return result;
+}
+
+function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan}){
+  const done = logs.some(l=>l.date===selDate&&l.exercise===ex.name);
+  const vidUrl = exerciseVideos&&exerciseVideos[ex.name];
+  const pr = getExercisePR(logs, ex.name);
+  return (
+    <div style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}{ex.type==="time"&&<span style={{fontSize:9,color:"var(--gold)",background:"rgba(201,168,76,0.15)",borderRadius:3,padding:"1px 5px",marginLeft:4}}>TIME</span>}</div>
+        <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
+        {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}</div>}
+      </div>
+      {vidUrl&&<ExerciseVideo url={vidUrl}/>}
+      {done
+        ?<span style={{fontSize:11,color:"var(--green)",fontWeight:700}}>✓ Done</span>
+        :<button onClick={()=>logFromPlan(ex)} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Barlow Condensed",letterSpacing:0.5}}>Log It</button>
+      }
+    </div>
+  );
+}
+
 function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelDate,datedPlans,plans,logPlanEx,addEx,ef,setEf,sAE,setSAE,logs,exerciseVideos}) {
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
@@ -524,22 +561,14 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
             </button>
           </div>
 
-          {activePlan&&(activePlan.exercises||[]).map((ex,i)=>{
-            const done = logs.some(l=>l.date===selDate&&l.exercise===ex.name);
-            const vidUrl = exerciseVideos&&exerciseVideos[ex.name];
-            const pr = getExercisePR(logs, ex.name);
-            return(
-              <div key={i} style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}{ex.type==="time"&&<span style={{fontSize:9,color:"var(--gold)",background:"rgba(201,168,76,0.15)",borderRadius:3,padding:"1px 5px",marginLeft:4}}>TIME</span>}</div>
-                  <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
-                  {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}</div>}
-                </div>
-                {vidUrl&&<ExerciseVideo url={vidUrl}/>}
-                {done
-                  ?<span style={{fontSize:11,color:"var(--green)",fontWeight:700}}>✓ Done</span>
-                  :<button onClick={()=>logFromPlan(ex)} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Barlow Condensed",letterSpacing:0.5}}>Log It</button>
-                }
+          {activePlan&&groupExercisesByField(activePlan.exercises||[]).map((item,gi)=>{
+            if(item.type==="single"){
+              return <ExPlanCard key={gi} ex={item.ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={logFromPlan}/>;
+            }
+            return (
+              <div key={gi} style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
+                {item.exercises.map((ex,i)=><ExPlanCard key={i} ex={ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={logFromPlan}/>)}
               </div>
             );
           })}
