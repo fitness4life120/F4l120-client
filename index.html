@@ -203,6 +203,47 @@ async function subscribeToPush(clientId){
   } catch(e){ return { ok:false, reason:"subscribe_failed", message: (e && e.message) || String(e) }; }
 }
 
+async function uploadProgressPhoto(file, clientId, angle){
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = `${clientId}/${Date.now()}-${angle.toLowerCase()}.${ext}`;
+  const res = await fetch(`${SUPA_URL}/storage/v1/object/progress-photos/${path}`, {
+    method: "POST",
+    headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": file.type || "image/jpeg" },
+    body: file
+  });
+  if(!res.ok) throw new Error("Upload failed");
+  return path;
+}
+
+function extractPhotoPath(pathOrUrl){
+  const marker = "/progress-photos/";
+  return pathOrUrl.includes(marker) ? pathOrUrl.split(marker)[1] : pathOrUrl;
+}
+
+async function getSignedPhotoUrl(pathOrUrl){
+  const path = extractPhotoPath(pathOrUrl);
+  try {
+    const res = await fetch(`${SUPA_URL}/storage/v1/object/sign/progress-photos/${path}`, {
+      method: "POST",
+      headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ expiresIn: 86400 })
+    });
+    if(!res.ok) return null;
+    const data = await res.json();
+    return `${SUPA_URL}/storage/v1${data.signedURL}`;
+  } catch(e){ return null; }
+}
+
+async function deleteProgressPhotoFile(photoUrlOrPath){
+  try {
+    const path = extractPhotoPath(photoUrlOrPath);
+    await fetch(`${SUPA_URL}/storage/v1/object/progress-photos/${path}`, {
+      method: "DELETE",
+      headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` }
+    });
+  } catch(e){ /* best-effort cleanup */ }
+}
+
 function getYouTubeId(url){
   if(!url) return null;
   const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
@@ -642,6 +683,130 @@ function MacroBox({label,value,goal,color}){
         {Math.round(value)}{goal?<span style={{fontSize:10,color:"var(--muted)"}}>/{goal}</span>:"g"}
       </div>
       <div style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:0.5,marginTop:2}}>{label}</div>
+    </div>
+  );
+}
+
+function ProgressPhotoGallery({client, photos, setPhotos, toast_}){
+  const [showForm,setShowForm] = useState(false);
+  const [angle,setAngle] = useState("Front");
+  const [uploading,setUploading] = useState(false);
+  const [selected,setSelected] = useState([]);
+  const [compareOpen,setCompareOpen] = useState(false);
+  const [signedUrls,setSignedUrls] = useState({});
+
+  useEffect(()=>{
+    const missing = photos.filter(p=>!signedUrls[p.id]);
+    if(!missing.length) return;
+    missing.forEach(p=>{
+      getSignedPhotoUrl(p.photo_url).then(url=>{
+        if(url) setSignedUrls(prev=>({...prev,[p.id]:url}));
+      });
+    });
+  },[photos]);
+
+  const onFileSelected = async (file) => {
+    if(!file || !client) return;
+    setUploading(true);
+    try {
+      const path = await uploadProgressPhoto(file, client.id, angle);
+      const saved = await api("progress_photos",{method:"POST",body:JSON.stringify({
+        client_id: client.id, date: tod(), angle: angle, photo_url: path
+      })});
+      if(saved&&saved[0]){
+        setPhotos(prev=>[saved[0],...prev]);
+        const url = await getSignedPhotoUrl(path);
+        if(url) setSignedUrls(prev=>({...prev,[saved[0].id]:url}));
+      }
+      toast_("Photo added ✓");
+      setShowForm(false);
+    } catch(e){ toast_("Could not upload photo"); }
+    setUploading(false);
+  };
+
+  const deletePhoto = async (photo) => {
+    if(!confirm("Delete this photo?")) return;
+    try {
+      await api(`progress_photos?id=eq.${photo.id}`,{method:"DELETE"});
+      deleteProgressPhotoFile(photo.photo_url);
+      setPhotos(prev=>prev.filter(p=>p.id!==photo.id));
+      setSelected(prev=>prev.filter(id=>id!==photo.id));
+    } catch(e){ toast_("Could not delete photo"); }
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev=>{
+      if(prev.includes(id)) return prev.filter(x=>x!==id);
+      if(prev.length>=2) return [prev[1],id];
+      return [...prev,id];
+    });
+  };
+
+  const selectedPhotos = selected.map(id=>photos.find(p=>p.id===id)).filter(Boolean)
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  return (
+    <div className="card">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div className="clbl" style={{marginBottom:0}}>Progress Photos</div>
+        <button onClick={()=>setShowForm(v=>!v)} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{showForm?"Cancel":"+ Add Photo"}</button>
+      </div>
+
+      {showForm&&(
+        <div style={{marginBottom:12}}>
+          <div style={{display:"flex",gap:6,marginBottom:10}}>
+            {["Front","Side","Back"].map(a=>(
+              <button key={a} onClick={()=>setAngle(a)} style={{flex:1,padding:"8px 4px",borderRadius:8,border:"1px solid "+(angle===a?"var(--teal)":"var(--b1)"),background:angle===a?"var(--teal3)":"var(--s1)",color:angle===a?"var(--teal2)":"var(--muted)",fontSize:12,fontWeight:700,cursor:"pointer"}}>{a}</button>
+            ))}
+          </div>
+          <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:100,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)"}}>
+            <div style={{fontSize:12,fontWeight:600}}>{uploading?"Uploading…":"Tap to take or upload a photo"}</div>
+            <input type="file" accept="image/*" capture="environment" disabled={uploading} style={{display:"none"}} onChange={e=>onFileSelected(e.target.files[0])}/>
+          </label>
+        </div>
+      )}
+
+      {selected.length===2&&(
+        <button onClick={()=>setCompareOpen(true)} style={{width:"100%",background:"var(--teal)",color:"#fff",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:12}}>Compare Selected Photos</button>
+      )}
+
+      {photos.length===0 ? (
+        <div style={{color:"var(--muted)",fontSize:12,fontStyle:"italic"}}>No progress photos yet</div>
+      ) : (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+          {photos.map(p=>(
+            <div key={p.id} style={{position:"relative"}}>
+              {signedUrls[p.id] ? (
+                <img
+                  src={signedUrls[p.id]}
+                  onClick={()=>toggleSelect(p.id)}
+                  style={{width:"100%",aspectRatio:"3/4",objectFit:"cover",borderRadius:8,cursor:"pointer",border:selected.includes(p.id)?"3px solid var(--teal)":"1px solid var(--b1)"}}
+                />
+              ) : (
+                <div style={{width:"100%",aspectRatio:"3/4",borderRadius:8,background:"var(--s1)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)",fontSize:10}}>Loading…</div>
+              )}
+              <div style={{fontSize:9,color:"var(--muted)",textAlign:"center",marginTop:3}}>{fmt(p.date)}</div>
+              <div style={{fontSize:9,color:"var(--gold)",textAlign:"center"}}>{p.angle}</div>
+              <button onClick={()=>deletePhoto(p)} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.6)",color:"#fff",border:"none",borderRadius:"50%",width:20,height:20,fontSize:11,cursor:"pointer",lineHeight:1}}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {compareOpen&&selectedPhotos.length===2&&(
+        <div onClick={()=>setCompareOpen(false)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.9)",zIndex:100,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{display:"flex",gap:8,width:"100%",maxWidth:500}}>
+            {selectedPhotos.map((p,i)=>(
+              <div key={p.id} style={{flex:1,textAlign:"center"}}>
+                <img src={signedUrls[p.id]} style={{width:"100%",borderRadius:8}}/>
+                <div style={{color:"#fff",fontSize:12,marginTop:6}}>{fmt(p.date)}</div>
+                <div style={{color:"var(--gold)",fontSize:11}}>{p.angle}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{color:"#fff",fontSize:12,marginTop:16,opacity:0.7}}>Tap anywhere to close</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1103,6 +1268,7 @@ function App(){
   const [msgBody,setMsgBody] = useState("");
   const [habits,setHabits] = useState([]);
   const [habitLogs,setHabitLogs] = useState([]);
+  const [progressPhotos,setProgressPhotos] = useState([]);
 
   const [sAE,setSAE]   = useState(false);
   const [sProg,setSProg] = useState(false);
@@ -1148,13 +1314,15 @@ function App(){
         api(`messages?thread_client_id=eq.${id}&order=created_at.asc`),
         api(`habits?client_id=eq.${id}&order=created_at.asc`),
         api(`habit_logs?client_id=eq.${id}&order=date.desc`),
+        api(`progress_photos?client_id=eq.${id}&order=date.desc`),
       ]);
-      const [c,l,pr,pl,dp,tn,msgs,habs,habLogs] = results;
+      const [c,l,pr,pl,dp,tn,msgs,habs,habLogs,photos] = results;
       if(c.length){
         setClient(c[0]); setLogs(l); setProg(pr); setPlans(pl); setDatedPlans(dp||[]);
         setTNote(tn[0]?.message||"");
         setMessages(msgs||[]);
         setHabits(habs||[]); setHabitLogs(habLogs||[]);
+        setProgressPhotos(photos||[]);
         sl("f4l_client_id",id);
       }
     } catch(e){setPinErr("Could not connect. Check your connection.");}
@@ -1463,6 +1631,7 @@ function App(){
       {/* PROGRESS */}
       {view==="progress"&&(
         <div className="scroll">
+          <ProgressPhotoGallery client={client} photos={progressPhotos} setPhotos={setProgressPhotos} toast_={toast_}/>
           {latestP&&(
             <div className="card" style={{textAlign:"center",padding:"18px 14px"}}>
               <div className="clbl">Current Weight</div>
