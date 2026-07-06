@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -461,7 +461,7 @@ function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan}){
     <div style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}{ex.type==="time"&&<span style={{fontSize:9,color:"var(--gold)",background:"rgba(201,168,76,0.15)",borderRadius:3,padding:"1px 5px",marginLeft:4}}>TIME</span>}</div>
-        <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
+        <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.weight?" @ "+ex.weight+" lbs":""}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
         {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
       </div>
       {vidUrl&&<ExerciseVideo url={vidUrl}/>}
@@ -505,7 +505,8 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
       const n = Math.max(1, parseInt(e.sets) || 1);
       const isTime = e.type === "time";
       const repsDefault = !isTime && /^\d+$/.test(String(e.reps||"").trim()) ? String(e.reps).trim() : "";
-      return { exercise:e.name, muscle:e.muscle||"Full Body", type: isTime?"time":"reps", setRows: Array.from({length:n}, ()=>({reps:repsDefault, weight:""})) };
+      const weightDefault = e.weight ? String(e.weight) : "";
+      return { exercise:e.name, muscle:e.muscle||"Full Body", type: isTime?"time":"reps", setRows: Array.from({length:n}, ()=>({reps:repsDefault, weight:weightDefault})) };
     });
     setLogEf({blocks, notes:"", date:selDate||today, from_plan:true, exerciseGroup: ex.group||null});
     setShowLogForm(true);
@@ -1534,7 +1535,8 @@ function App(){
     const n = Math.max(1, parseInt(ex.sets) || 1);
     const isTime = ex.type === "time";
     const repsDefault = !isTime && /^\d+$/.test(String(ex.reps||"").trim()) ? String(ex.reps).trim() : "";
-    const rows = Array.from({length:n}, ()=>({reps:repsDefault, weight:""}));
+    const weightDefault = ex.weight ? String(ex.weight) : "";
+    const rows = Array.from({length:n}, ()=>({reps:repsDefault, weight:weightDefault}));
     setEf({date:tod(),blocks:[{exercise:ex.name,muscle:ex.muscle||"Full Body",type:isTime?"time":"reps",setRows:rows}],notes:"",from_plan:true,exerciseGroup:null});
     setPEL(ex); setSAE(true);
   };
