@@ -453,7 +453,17 @@ function groupExercisesByField(exercises){
   return result;
 }
 
-function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan}){
+function parseRestSeconds(str){
+  if(!str) return null;
+  const s = String(str).toLowerCase();
+  const m = s.match(/(\d+(?:\.\d+)?)/);
+  if(!m) return null;
+  const num = parseFloat(m[1]);
+  if(s.includes("min")) return Math.round(num*60);
+  return Math.round(num);
+}
+
+function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan, startRestTimer}){
   const done = logs.some(l=>l.date===selDate&&l.exercise===ex.name);
   const vidUrl = exerciseVideos&&exerciseVideos[ex.name];
   const pr = getExercisePR(logs, ex.name);
@@ -465,6 +475,7 @@ function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan}){
         {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
       </div>
       {vidUrl&&<ExerciseVideo url={vidUrl}/>}
+      {ex.rest&&parseRestSeconds(ex.rest)&&<button onClick={()=>startRestTimer(parseRestSeconds(ex.rest),ex.name)} style={{background:"var(--s1)",border:"1px solid var(--b1)",color:"var(--muted)",borderRadius:6,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Barlow Condensed",letterSpacing:0.5}}>⏱ Rest</button>}
       {done
         ?<span style={{fontSize:11,color:"var(--green)",fontWeight:700}}>✓ Done</span>
         :<button onClick={()=>logFromPlan(ex)} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Barlow Condensed",letterSpacing:0.5}}>Log It</button>
@@ -473,7 +484,7 @@ function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan}){
   );
 }
 
-function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelDate,datedPlans,plans,logPlanEx,addEx,ef,setEf,sAE,setSAE,logs,exerciseVideos}) {
+function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelDate,datedPlans,plans,logPlanEx,addEx,ef,setEf,sAE,setSAE,logs,exerciseVideos,startRestTimer}) {
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
   const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -593,12 +604,12 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
 
           {activePlan&&groupExercisesByField(activePlan.exercises||[]).map((item,gi)=>{
             if(item.type==="single"){
-              return <ExPlanCard key={gi} ex={item.ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={logFromPlan}/>;
+              return <ExPlanCard key={gi} ex={item.ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={logFromPlan} startRestTimer={startRestTimer}/>;
             }
             return (
               <div key={gi} style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
                 <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
-                {item.exercises.map((ex,i)=><ExPlanCard key={i} ex={ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={logFromPlan}/>)}
+                {item.exercises.map((ex,i)=><ExPlanCard key={i} ex={ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={logFromPlan} startRestTimer={startRestTimer}/>)}
               </div>
             );
           })}
@@ -948,11 +959,30 @@ function FoodTab({client, toast_}){
   const [photoMediaType,setPhotoMediaType] = useState(null);
   const [analyzing,setAnalyzing] = useState(false);
   const [result,setResult] = useState(null);
+  const [waterLogs,setWaterLogs] = useState([]);
 
   useEffect(()=>{
     if(!client) return;
     api(`nutrition_logs?client_id=eq.${client.id}&order=created_at.asc`).then(setNLogs).catch(()=>toast_("Could not load meals"));
+    api(`water_logs?client_id=eq.${client.id}`).then(setWaterLogs).catch(()=>{});
   },[client.id]);
+
+  const waterToday = waterLogs.find(w=>w.date===nDate);
+  const waterGlasses = waterToday ? waterToday.glasses : 0;
+  const WATER_TARGET = 8;
+
+  const adjustWater = async (delta) => {
+    const newCount = Math.max(0, waterGlasses + delta);
+    try {
+      if(waterToday){
+        await api(`water_logs?id=eq.${waterToday.id}`,{method:"PATCH",body:JSON.stringify({glasses:newCount,updated_at:new Date().toISOString()})});
+        setWaterLogs(prev=>prev.map(w=>w.id===waterToday.id?{...w,glasses:newCount}:w));
+      } else {
+        const saved = await api("water_logs",{method:"POST",body:JSON.stringify({client_id:client.id,date:nDate,glasses:newCount})});
+        if(saved&&saved[0]) setWaterLogs(prev=>[...prev,saved[0]]);
+      }
+    } catch(e){ toast_("Could not update water"); }
+  };
 
   const shiftDay = (n) => {
     const d = new Date(nDate); d.setDate(d.getDate()+n);
@@ -1062,6 +1092,22 @@ function FoodTab({client, toast_}){
           <MacroBox label="Carbs" value={totals.carbs_g} goal={carbGoal} color="#ffd54f"/>
           <MacroBox label="Fat" value={totals.fat_g} goal={fatGoal} color="#ef9a9a"/>
           <MacroBox label="Fiber" value={totals.fiber_g} goal={null} color="#a5d6a7"/>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div className="clbl" style={{marginBottom:0}}>Water</div>
+          <span style={{fontSize:11,color:"var(--muted)"}}>{waterGlasses} of {WATER_TARGET} glasses</span>
+        </div>
+        <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:12,flexWrap:"wrap"}}>
+          {Array.from({length:WATER_TARGET}).map((_,i)=>(
+            <span key={i} style={{fontSize:22,opacity:i<waterGlasses?1:0.25,cursor:"pointer"}} onClick={()=>adjustWater(i<waterGlasses?-(waterGlasses-i):(i-waterGlasses+1))}>💧</span>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>adjustWater(-1)} style={{flex:1,background:"var(--s1)",border:"1px solid var(--b1)",color:"var(--muted)",borderRadius:8,padding:10,fontSize:16,fontWeight:700,cursor:"pointer"}}>−</button>
+          <button onClick={()=>adjustWater(1)} style={{flex:1,background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:8,padding:10,fontSize:16,fontWeight:700,cursor:"pointer"}}>+</button>
         </div>
       </div>
 
@@ -1396,6 +1442,24 @@ function App(){
   const [habits,setHabits] = useState([]);
   const [habitLogs,setHabitLogs] = useState([]);
   const [progressPhotos,setProgressPhotos] = useState([]);
+  const [restTimer,setRestTimer] = useState(null);
+
+  const startRestTimer = (seconds, label) => {
+    setRestTimer({ remaining: seconds, total: seconds, label });
+  };
+
+  useEffect(()=>{
+    if(!restTimer || restTimer.remaining<=0) return;
+    const t = setTimeout(()=>{
+      setRestTimer(p=>p?({...p, remaining:p.remaining-1}):null);
+    },1000);
+    return ()=>clearTimeout(t);
+  },[restTimer]);
+
+  useEffect(()=>{
+    if(restTimer && restTimer.remaining===0 && navigator.vibrate) navigator.vibrate([200,100,200]);
+  },[restTimer&&restTimer.remaining]);
+
 
   const [sAE,setSAE]   = useState(false);
   const [sProg,setSProg] = useState(false);
@@ -1752,7 +1816,7 @@ function App(){
             datedPlans={datedPlans} plans={plans}
             logPlanEx={logPlanEx} addEx={addEx}
             ef={ef} setEf={setEf} sAE={sAE} setSAE={setSAE}
-            logs={logs} exerciseVideos={exerciseVideos}
+            logs={logs} exerciseVideos={exerciseVideos} startRestTimer={startRestTimer}
           />
         </div>
       )}
@@ -1896,6 +1960,19 @@ function App(){
                 </div>
               )):<div style={{color:"var(--muted)",fontSize:12,fontStyle:"italic"}}>No PRs yet</div>;
             })()}
+          </div>
+        </div>
+      )}
+
+      {restTimer&&(
+        <div style={{position:"fixed",bottom:64,left:0,right:0,background:restTimer.remaining===0?"var(--green)":"var(--teal)",color:"#fff",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:90,boxShadow:"0 -4px 20px rgba(0,0,0,0.3)"}}>
+          <div>
+            <div style={{fontSize:10,opacity:0.85,textTransform:"uppercase",letterSpacing:1}}>{restTimer.remaining===0?"Rest done!":"Resting · "+restTimer.label}</div>
+            <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:22,fontWeight:800}}>{restTimer.remaining===0?"Go!":`${Math.floor(restTimer.remaining/60)}:${String(restTimer.remaining%60).padStart(2,"0")}`}</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setRestTimer(p=>({...p,remaining:p.remaining+15}))} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"8px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>+15s</button>
+            <button onClick={()=>setRestTimer(null)} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"8px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>✕</button>
           </div>
         </div>
       )}
