@@ -949,6 +949,57 @@ function ProgressPhotoGallery({client, photos, setPhotos, toast_}){
   );
 }
 
+function WorkoutHeatmap({logs}){
+  const volByDate = {};
+  const hasLogByDate = {};
+  logs.forEach(l=>{
+    const vol = (+l.sets||1)*(+l.reps||0)*(+l.weight||0);
+    volByDate[l.date] = (volByDate[l.date]||0) + vol;
+    hasLogByDate[l.date] = true;
+  });
+  const todayD = new Date(tod()+"T12:00:00");
+  const DAYS = 84;
+  const endDow = todayD.getDay();
+  const totalCells = Math.ceil((DAYS+endDow)/7)*7;
+  const cells = [];
+  for(let i=totalCells-1;i>=0;i--){
+    const d = new Date(todayD); d.setDate(d.getDate()-i);
+    const iso = d.toISOString().slice(0,10);
+    cells.push({date:iso, active: !!hasLogByDate[iso], vol: volByDate[iso]||0});
+  }
+  const maxVol = Math.max(1,...cells.map(c=>c.vol));
+  const weeks = [];
+  for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
+  const colorFor = (c) => {
+    if(!c.active) return "var(--s1)";
+    const ratio = c.vol/maxVol;
+    if(ratio>0.66) return "var(--teal)";
+    if(ratio>0.33) return "rgba(27,136,153,0.6)";
+    return "rgba(27,136,153,0.35)";
+  };
+  return (
+    <div>
+      <div style={{display:"flex",gap:3,overflowX:"auto",paddingBottom:6}}>
+        {weeks.map((w,wi)=>(
+          <div key={wi} style={{display:"flex",flexDirection:"column",gap:3,flexShrink:0}}>
+            {w.map((c,di)=>(
+              <div key={di} title={c.date+(c.active?" — logged":"")} style={{width:11,height:11,borderRadius:2,background:colorFor(c)}}/>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:6,fontSize:9,color:"var(--muted)"}}>
+        <span>Less</span>
+        <div style={{width:10,height:10,borderRadius:2,background:"var(--s1)"}}/>
+        <div style={{width:10,height:10,borderRadius:2,background:"rgba(27,136,153,0.35)"}}/>
+        <div style={{width:10,height:10,borderRadius:2,background:"rgba(27,136,153,0.6)"}}/>
+        <div style={{width:10,height:10,borderRadius:2,background:"var(--teal)"}}/>
+        <span>More</span>
+      </div>
+    </div>
+  );
+}
+
 function FoodTab({client, toast_}){
   const [nLogs,setNLogs] = useState([]);
   const [nDate,setNDate] = useState(tod());
@@ -1928,6 +1979,10 @@ function App(){
               <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:52,fontWeight:700,color:"var(--teal2)",lineHeight:1}}>{allVol>0?allVol.toLocaleString():"—"}</div>
               <div style={{fontSize:10,letterSpacing:2,color:"var(--muted)",textTransform:"uppercase",marginTop:3}}>Total lbs moved</div>
             </div>
+          </div>
+          <div className="card">
+            <div className="clbl">Workout Consistency</div>
+            <WorkoutHeatmap logs={logs}/>
           </div>
           <div className="srow">
             <div className="sbox"><div className="sv">{logs.length}</div><div className="slbl">Sets</div></div>
