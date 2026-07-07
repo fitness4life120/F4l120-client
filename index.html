@@ -1381,6 +1381,8 @@ function HabitsTab({client, habits, setHabits, habitLogs, setHabitLogs, toast_})
 
 function MessagesTab({client, messages, setMessages, toast_}){
   const [body,setBody] = useState("");
+  const [resources,setResources] = useState([]);
+  const [resourceUrls,setResourceUrls] = useState({});
   const [pushState,setPushState] = useState(()=>{
     if(!pushSupported()) return "unsupported";
     if(isIOS() && !isStandalone()) return "ios_needs_install";
@@ -1389,6 +1391,32 @@ function MessagesTab({client, messages, setMessages, toast_}){
     return "promptable";
   });
   const bottomRef = useRef(null);
+
+  useEffect(()=>{
+    if(!client) return;
+    api(`resource_shares?client_id=eq.${client.id}&select=library_id`).then(async shares=>{
+      if(!shares.length){ setResources([]); return; }
+      const ids = shares.map(s=>s.library_id).join(",");
+      const files = await api(`pdf_library?id=in.(${ids})&order=created_at.desc`);
+      setResources(files||[]);
+    }).catch(()=>{});
+  },[client.id]);
+
+  const openResource = async (r) => {
+    if(resourceUrls[r.id]){ window.open(resourceUrls[r.id], "_blank"); return; }
+    try {
+      const res = await fetch(`${SUPA_URL}/storage/v1/object/sign/client-resources/${r.file_path}`, {
+        method: "POST",
+        headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ expiresIn: 3600 })
+      });
+      if(!res.ok) throw new Error("sign failed");
+      const data = await res.json();
+      const url = `${SUPA_URL}/storage/v1${data.signedURL}`;
+      setResourceUrls(prev=>({...prev,[r.id]:url}));
+      window.open(url, "_blank");
+    } catch(e){ toast_("Could not open file"); }
+  };
 
   const enableNotifications = async () => {
     const res = await subscribeToPush(client.id);
@@ -1441,6 +1469,18 @@ function MessagesTab({client, messages, setMessages, toast_}){
 
   return (
     <div className="scroll" style={{display:"flex",flexDirection:"column",height:"100%"}}>
+      {resources.length>0&&(
+        <div className="card">
+          <div className="clbl">Shared Files</div>
+          {resources.map(r=>(
+            <div key={r.id} onClick={()=>openResource(r)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",cursor:"pointer",borderBottom:"1px solid var(--b1)"}}>
+              <span style={{fontSize:18}}>{r.file_type==="pdf"?"📄":"📝"}</span>
+              <span style={{fontSize:13,fontWeight:600,flex:1}}>{r.name}</span>
+              <span style={{fontSize:11,color:"var(--teal2)"}}>Open ›</span>
+            </div>
+          ))}
+        </div>
+      )}
       {pushState==="promptable"&&(
         <div style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:"10px 12px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
           <span style={{fontSize:12,color:"var(--teal2)"}}>Get notified when Coach Steve messages you</span>
