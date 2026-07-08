@@ -499,7 +499,8 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
   const getDateStr = (d) => `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   const getDayName = (dateStr) => DAY_NAMES[new Date(dateStr+'T12:00:00').getDay()];
 
-  const selDatedPlan = selDate ? datedPlans.find(p=>p.date===selDate) : null;
+const selDatedPlans = selDate ? datedPlans.filter(p=>p.date===selDate) : [];
+const selDatedPlan = selDatedPlans[0]||null;
   const selDayName = selDate ? getDayName(selDate) : null;
   const selRecurPlan = selDayName ? plans.find(p=>p.day===selDayName) : null;
   const activePlan = selDatedPlan || selRecurPlan;
