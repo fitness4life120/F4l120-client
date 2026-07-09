@@ -1014,28 +1014,55 @@ function FoodTab({client, toast_}){
   const [listening,setListening] = useState(false);
   const recognitionRef = useRef(null);
   const baseTextRef = useRef("");
+  const shouldContinueRef = useRef(false);
   const SpeechRecognitionAPI = typeof window!=="undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
 
   const startListening = () => {
     if(!SpeechRecognitionAPI){ toast_("Voice input isn't supported in this browser"); return; }
-    const rec = new SpeechRecognitionAPI();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = "en-US";
     baseTextRef.current = mealText ? mealText.trim()+" " : "";
-    rec.onresult = (e) => {
-      let transcript = "";
-      for(let i=0;i<e.results.length;i++) transcript += e.results[i][0].transcript;
-      setMealText((baseTextRef.current + transcript).trim());
+    shouldContinueRef.current = true;
+
+    const beginSegment = () => {
+      const rec = new SpeechRecognitionAPI();
+      rec.continuous = false;
+      rec.interimResults = true;
+      rec.lang = "en-US";
+      rec.onresult = (e) => {
+        let finalText = "";
+        let interimText = "";
+        for(let i=e.resultIndex;i<e.results.length;i++){
+          if(e.results[i].isFinal) finalText += e.results[i][0].transcript;
+          else interimText += e.results[i][0].transcript;
+        }
+        if(finalText){
+          baseTextRef.current = (baseTextRef.current + " " + finalText).replace(/\s+/g," ").trim() + " ";
+          setMealText(baseTextRef.current.trim());
+        } else if(interimText){
+          setMealText((baseTextRef.current + interimText).replace(/\s+/g," ").trim());
+        }
+      };
+      rec.onerror = (e) => {
+        if(e.error === "no-speech" || e.error === "aborted") return; // let onend decide whether to restart
+        shouldContinueRef.current = false;
+        setListening(false);
+      };
+      rec.onend = () => {
+        if(shouldContinueRef.current){
+          try { beginSegment(); } catch(err){ setListening(false); }
+        } else {
+          setListening(false);
+        }
+      };
+      recognitionRef.current = rec;
+      rec.start();
     };
-    rec.onerror = () => { setListening(false); };
-    rec.onend = () => { setListening(false); };
-    recognitionRef.current = rec;
-    rec.start();
+
+    beginSegment();
     setListening(true);
   };
 
   const stopListening = () => {
+    shouldContinueRef.current = false;
     if(recognitionRef.current) recognitionRef.current.stop();
     setListening(false);
   };
