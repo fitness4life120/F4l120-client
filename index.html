@@ -499,13 +499,11 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
   const getDateStr = (d) => `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   const getDayName = (dateStr) => DAY_NAMES[new Date(dateStr+'T12:00:00').getDay()];
 
-const selDatedPlans = selDate ? datedPlans.filter(p=>p.date===selDate) : [];
-  const [datedPlanChoice, setDatedPlanChoice] = React.useState(null);
-  React.useEffect(()=>{ setDatedPlanChoice(null); },[selDate]);
-  const selDatedPlan = selDatedPlans[0]||null;
+  const selDatedPlan = selDate ? datedPlans.find(p=>p.date===selDate) : null;
   const selDayName = selDate ? getDayName(selDate) : null;
   const selRecurPlan = selDayName ? plans.find(p=>p.day===selDayName) : null;
-  const activePlan = (selDatedPlans.length>1 ? (datedPlanChoice||selDatedPlans[0]) : selDatedPlan) || selRecurPlan;
+  const activePlan = selDatedPlan || selRecurPlan;
+
   const [showLogForm, setShowLogForm] = React.useState(false);
   const blankBlock = () => ({exercise:"", muscle:"Full Body", type:"reps", setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]});
   const [logEf, setLogEf] = React.useState({blocks:[blankBlock()],notes:"",date:today,from_plan:false,exerciseGroup:null});
@@ -596,16 +594,7 @@ const selDatedPlans = selDate ? datedPlans.filter(p=>p.date===selDate) : [];
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div>
               <div style={{fontFamily:"Barlow Condensed",fontSize:11,fontWeight:700,letterSpacing:2,color:"var(--gold)",textTransform:"uppercase"}}>{selDayName} · {selDate}</div>
-             <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:16,fontWeight:700,color:"var(--txt)",marginTop:2}}>
-  {selDatedPlans.length>1
-    ? <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
-        {selDatedPlans.map((p,i)=>(
-          <span key={i} onClick={()=>setDatedPlanChoice(p)} style={{cursor:"pointer",padding:"5px 14px",borderRadius:6,background:activePlan===p?"var(--teal)":"var(--s2)",border:"1px solid "+(activePlan===p?"var(--teal)":"var(--b1)"),color:activePlan===p?"white":"var(--muted)",fontSize:12,fontWeight:700}}>{p.label}</span>
-        ))}
-      </div>
-    : activePlan?activePlan.label:"No Plan"
-  }
-</div>
+              <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:16,fontWeight:700,color:"var(--txt)",marginTop:2}}>{activePlan?activePlan.label:"No Plan"}</div>
             </div>
             <button onClick={()=>setShowLogForm(s=>!s)}
               style={{background:"linear-gradient(135deg,#186476,var(--teal))",color:"white",border:"none",borderRadius:8,padding:"9px 14px",fontFamily:"Barlow Condensed",fontSize:12,fontWeight:800,letterSpacing:1,textTransform:"uppercase",cursor:"pointer"}}>
@@ -1022,6 +1011,38 @@ function FoodTab({client, toast_}){
   const [analyzing,setAnalyzing] = useState(false);
   const [result,setResult] = useState(null);
   const [waterLogs,setWaterLogs] = useState([]);
+  const [listening,setListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const baseTextRef = useRef("");
+  const SpeechRecognitionAPI = typeof window!=="undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+
+  const startListening = () => {
+    if(!SpeechRecognitionAPI){ toast_("Voice input isn't supported in this browser"); return; }
+    const rec = new SpeechRecognitionAPI();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    baseTextRef.current = mealText ? mealText.trim()+" " : "";
+    rec.onresult = (e) => {
+      let transcript = "";
+      for(let i=0;i<e.results.length;i++) transcript += e.results[i][0].transcript;
+      setMealText((baseTextRef.current + transcript).trim());
+    };
+    rec.onerror = () => { setListening(false); };
+    rec.onend = () => { setListening(false); };
+    recognitionRef.current = rec;
+    rec.start();
+    setListening(true);
+  };
+
+  const stopListening = () => {
+    if(recognitionRef.current) recognitionRef.current.stop();
+    setListening(false);
+  };
+
+  useEffect(()=>{
+    if(nMode!=="voice" && listening) stopListening();
+  },[nMode]);
 
   useEffect(()=>{
     if(!client) return;
@@ -1060,7 +1081,7 @@ function FoodTab({client, toast_}){
   };
 
   const runAnalysis = async () => {
-    if(nMode==="text" && !mealText.trim()){ toast_("Describe the meal first"); return; }
+    if(nMode!=="photo" && !mealText.trim()){ toast_(nMode==="voice"?"Record what you ate first":"Describe the meal first"); return; }
     if(nMode==="photo" && !photoBase64){ toast_("Choose a photo first"); return; }
     setAnalyzing(true); setResult(null);
     try {
@@ -1199,7 +1220,8 @@ function FoodTab({client, toast_}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div className="clbl" style={{marginBottom:0}}>Log a Meal</div>
           <div style={{display:"flex",gap:4,background:"var(--bg)",borderRadius:16,padding:3}}>
-            <button onClick={()=>setNMode("text")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode!=="photo"?"var(--teal)":"transparent",color:nMode!=="photo"?"#fff":"var(--muted)"}}>Text</button>
+            <button onClick={()=>setNMode("text")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="text"?"var(--teal)":"transparent",color:nMode==="text"?"#fff":"var(--muted)"}}>Text</button>
+            {SpeechRecognitionAPI&&<button onClick={()=>setNMode("voice")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="voice"?"var(--teal)":"transparent",color:nMode==="voice"?"#fff":"var(--muted)"}}>🎤 Voice</button>}
             <button onClick={()=>setNMode("photo")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="photo"?"var(--teal)":"transparent",color:nMode==="photo"?"#fff":"var(--muted)"}}>Photo</button>
           </div>
         </div>
@@ -1223,10 +1245,20 @@ function FoodTab({client, toast_}){
           )
         )}
 
+        {nMode==="voice" && (
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:10}}>
+            <button
+              onClick={listening?stopListening:startListening}
+              style={{width:64,height:64,borderRadius:"50%",border:"none",cursor:"pointer",background:listening?"var(--red)":"var(--teal)",color:"#fff",fontSize:26,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:listening?"0 0 0 8px rgba(224,82,82,0.15)":"0 0 0 8px rgba(27,136,153,0.15)",transition:"box-shadow 0.2s"}}
+            >{listening?"■":"🎤"}</button>
+            <div style={{fontSize:11,color:"var(--muted)",marginTop:8}}>{listening?"Listening… tap to stop":"Tap to speak what you ate"}</div>
+          </div>
+        )}
+
         {nMode==="photo" ? (
           <input placeholder="Optional note..." value={mealText} onChange={e=>setMealText(e.target.value)} style={{background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",marginBottom:10}}/>
         ) : (
-          <textarea placeholder="Describe your meal... e.g. 3 eggs, 2 toast, 1 tbsp butter, coffee" value={mealText} onChange={e=>setMealText(e.target.value)} style={{background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",minHeight:70,resize:"vertical",marginBottom:10}}/>
+          <textarea placeholder={nMode==="voice"?"Your transcribed meal will appear here — feel free to edit it":"Describe your meal... e.g. 3 eggs, 2 toast, 1 tbsp butter, coffee"} value={mealText} onChange={e=>setMealText(e.target.value)} style={{background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",minHeight:70,resize:"vertical",marginBottom:10}}/>
         )}
 
         <button className="bp" disabled={analyzing} onClick={runAnalysis}>{analyzing?"Analyzing…":"Analyze with AI"}</button>
