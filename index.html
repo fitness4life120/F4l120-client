@@ -1027,19 +1027,16 @@ function FoodTab({client, toast_}){
       rec.continuous = false;
       rec.interimResults = true;
       rec.lang = "en-US";
+      let segmentFinal = "";
+
       rec.onresult = (e) => {
-        let finalText = "";
-        let interimText = "";
-        for(let i=e.resultIndex;i<e.results.length;i++){
-          if(e.results[i].isFinal) finalText += e.results[i][0].transcript;
-          else interimText += e.results[i][0].transcript;
+        let f = "", i2 = "";
+        for(let i=0;i<e.results.length;i++){
+          if(e.results[i].isFinal) f += e.results[i][0].transcript;
+          else i2 += e.results[i][0].transcript;
         }
-        if(finalText){
-          baseTextRef.current = (baseTextRef.current + " " + finalText).replace(/\s+/g," ").trim() + " ";
-          setMealText(baseTextRef.current.trim());
-        } else if(interimText){
-          setMealText((baseTextRef.current + interimText).replace(/\s+/g," ").trim());
-        }
+        segmentFinal = f;
+        setMealText((baseTextRef.current + f + i2).replace(/\s+/g," ").trim());
       };
       rec.onerror = (e) => {
         if(e.error === "no-speech" || e.error === "aborted") return; // let onend decide whether to restart
@@ -1047,6 +1044,10 @@ function FoodTab({client, toast_}){
         setListening(false);
       };
       rec.onend = () => {
+        if(segmentFinal){
+          baseTextRef.current = (baseTextRef.current + " " + segmentFinal).replace(/\s+/g," ").trim() + " ";
+        }
+        setMealText(baseTextRef.current.trim());
         if(shouldContinueRef.current){
           try { beginSegment(); } catch(err){ setListening(false); }
         } else {
