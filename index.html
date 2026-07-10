@@ -523,6 +523,46 @@ function parseRestSeconds(str){
   return Math.round(num);
 }
 
+function OptionalWorkoutsSection({workouts, logs, exerciseVideos, logPlanEx, startRestTimer}){
+  const [expandedId,setExpandedId] = useState(null);
+  if(!workouts.length) return null;
+  return (
+    <div style={{marginBottom:14}}>
+      <div className="clbl">🎯 Optional Workouts</div>
+      <div style={{fontSize:11,color:"var(--muted)",marginBottom:8}}>Bonus workouts you can do anytime — not tied to your calendar</div>
+      {workouts.map(w=>{
+        const expanded = expandedId===w.id;
+        return (
+          <div key={w.id} style={{background:"var(--s2)",border:"1px solid var(--b1)",borderRadius:8,marginBottom:8,overflow:"hidden"}}>
+            <div onClick={()=>setExpandedId(expanded?null:w.id)} style={{padding:"12px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:14,fontWeight:700}}>{w.label}</div>
+                <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{(w.exercises||[]).length} exercise{(w.exercises||[]).length!==1?"s":""}</div>
+              </div>
+              <span style={{color:"var(--muted)",fontSize:16}}>{expanded?"▾":"▸"}</span>
+            </div>
+            {expanded&&(
+              <div style={{padding:"0 14px 14px"}}>
+                {groupExercisesByField(w.exercises||[]).map((item,gi)=>{
+                  if(item.type==="single"){
+                    return <ExPlanCard key={gi} ex={item.ex} logs={logs} selDate={tod()} exerciseVideos={exerciseVideos} logFromPlan={logPlanEx} startRestTimer={startRestTimer}/>;
+                  }
+                  return (
+                    <div key={gi} style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
+                      <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
+                      {item.exercises.map((ex,i)=><ExPlanCard key={i} ex={ex} logs={logs} selDate={tod()} exerciseVideos={exerciseVideos} logFromPlan={logPlanEx} startRestTimer={startRestTimer}/>)}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan, startRestTimer}){
   const done = logs.some(l=>l.date===selDate&&l.exercise===ex.name);
   const vidUrl = exerciseVideos&&exerciseVideos[ex.name];
@@ -1600,27 +1640,20 @@ function HabitsTab({client, habits, setHabits, habitLogs, setHabitLogs, toast_})
   );
 }
 
-function MessagesTab({client, messages, setMessages, toast_}){
-  const [body,setBody] = useState("");
+function FilesTab({client, toast_}){
   const [resources,setResources] = useState([]);
   const [resourceUrls,setResourceUrls] = useState({});
-  const [pushState,setPushState] = useState(()=>{
-    if(!pushSupported()) return "unsupported";
-    if(isIOS() && !isStandalone()) return "ios_needs_install";
-    if(typeof Notification!=="undefined" && Notification.permission==="granted") return "enabled";
-    if(typeof Notification!=="undefined" && Notification.permission==="denied") return "denied";
-    return "promptable";
-  });
-  const bottomRef = useRef(null);
+  const [loaded,setLoaded] = useState(false);
 
   useEffect(()=>{
     if(!client) return;
     api(`resource_shares?client_id=eq.${client.id}&select=library_id`).then(async shares=>{
-      if(!shares.length){ setResources([]); return; }
+      if(!shares.length){ setResources([]); setLoaded(true); return; }
       const ids = shares.map(s=>s.library_id).join(",");
       const files = await api(`pdf_library?id=in.(${ids})&order=created_at.desc`);
       setResources(files||[]);
-    }).catch(()=>{});
+      setLoaded(true);
+    }).catch(()=>setLoaded(true));
   },[client.id]);
 
   const openResource = async (r) => {
@@ -1638,6 +1671,54 @@ function MessagesTab({client, messages, setMessages, toast_}){
       window.open(url, "_blank");
     } catch(e){ toast_("Could not open file"); }
   };
+
+  if(!loaded) return <div className="scroll"><div className="empty">Loading…</div></div>;
+
+  if(!resources.length){
+    return <div className="scroll"><div className="empty"><span className="ei">📁</span>No files shared yet<br/>Anything Coach Steve shares with you will show up here</div></div>;
+  }
+
+  const folders = {};
+  const folderOrder = [];
+  resources.forEach(r=>{
+    const key = r.folder || "Uncategorized";
+    if(!folders[key]){ folders[key] = []; folderOrder.push(key); }
+    folders[key].push(r);
+  });
+  folderOrder.sort((a,b)=>{
+    if(a==="Uncategorized") return 1;
+    if(b==="Uncategorized") return -1;
+    return a.localeCompare(b);
+  });
+
+  return (
+    <div className="scroll">
+      {folderOrder.map(folderName=>(
+        <div key={folderName} style={{marginBottom:16}}>
+          <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:11,color:"var(--gold)",letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:8}}>📁 {folderName}</div>
+          {folders[folderName].map(r=>(
+            <div key={r.id} onClick={()=>openResource(r)} className="card" style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:8}}>
+              <span style={{fontSize:22}}>{r.file_type==="pdf"?"📄":"📝"}</span>
+              <span style={{fontSize:14,fontWeight:600,flex:1}}>{r.name}</span>
+              <span style={{fontSize:11,color:"var(--teal2)"}}>Open ›</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MessagesTab({client, messages, setMessages, toast_}){
+  const [body,setBody] = useState("");
+  const [pushState,setPushState] = useState(()=>{
+    if(!pushSupported()) return "unsupported";
+    if(isIOS() && !isStandalone()) return "ios_needs_install";
+    if(typeof Notification!=="undefined" && Notification.permission==="granted") return "enabled";
+    if(typeof Notification!=="undefined" && Notification.permission==="denied") return "denied";
+    return "promptable";
+  });
+  const bottomRef = useRef(null);
 
   const enableNotifications = async () => {
     const res = await subscribeToPush(client.id);
@@ -1690,18 +1771,6 @@ function MessagesTab({client, messages, setMessages, toast_}){
 
   return (
     <div className="scroll" style={{display:"flex",flexDirection:"column",height:"100%"}}>
-      {resources.length>0&&(
-        <div className="card">
-          <div className="clbl">Shared Files</div>
-          {resources.map(r=>(
-            <div key={r.id} onClick={()=>openResource(r)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",cursor:"pointer",borderBottom:"1px solid var(--b1)"}}>
-              <span style={{fontSize:18}}>{r.file_type==="pdf"?"📄":"📝"}</span>
-              <span style={{fontSize:13,fontWeight:600,flex:1}}>{r.name}</span>
-              <span style={{fontSize:11,color:"var(--teal2)"}}>Open ›</span>
-            </div>
-          ))}
-        </div>
-      )}
       {pushState==="promptable"&&(
         <div style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:"10px 12px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
           <span style={{fontSize:12,color:"var(--teal2)"}}>Get notified when Coach Steve messages you</span>
@@ -1770,6 +1839,7 @@ function App(){
   const [habits,setHabits] = useState([]);
   const [habitLogs,setHabitLogs] = useState([]);
   const [progressPhotos,setProgressPhotos] = useState([]);
+  const [optionalWorkouts,setOptionalWorkouts] = useState([]);
   const [restTimer,setRestTimer] = useState(null);
 
   const startRestTimer = (seconds, label) => {
@@ -1834,14 +1904,16 @@ function App(){
         api(`habits?client_id=eq.${id}&order=created_at.asc`),
         api(`habit_logs?client_id=eq.${id}&order=date.desc`),
         api(`progress_photos?client_id=eq.${id}&order=date.desc`),
+        api(`optional_workouts?client_id=eq.${id}&order=created_at.desc`),
       ]);
-      const [c,l,pr,pl,dp,tn,msgs,habs,habLogs,photos] = results;
+      const [c,l,pr,pl,dp,tn,msgs,habs,habLogs,photos,optWorkouts] = results;
       if(c.length){
         setClient(c[0]); setLogs(l); setProg(pr); setPlans(pl); setDatedPlans(dp||[]);
         setTNote(tn[0]?.message||"");
         setMessages(msgs||[]);
         setHabits(habs||[]); setHabitLogs(habLogs||[]);
         setProgressPhotos(photos||[]);
+        setOptionalWorkouts(optWorkouts||[]);
         sl("f4l_client_id",id);
       }
     } catch(e){setPinErr("Could not connect. Check your connection.");}
@@ -2083,7 +2155,7 @@ function App(){
           </div>
         </div>
         <div className="tabbar">
-          {["today","plan","log","food","habits","messages","progress","stats"].map(v=>{
+          {["today","plan","log","food","habits","files","messages","progress","stats"].map(v=>{
             const unread = v==="messages" ? messages.filter(m=>m.sender==="trainer"&&!m.read_at).length : 0;
             return (
               <button key={v} className={`tab ${view===v?"active":""}`} onClick={()=>setView(v)}>
@@ -2149,6 +2221,7 @@ function App(){
       {/* PLAN */}
       {view==="plan"&&(
         <div className="scroll">
+          <OptionalWorkoutsSection workouts={optionalWorkouts} logs={logs} exerciseVideos={exerciseVideos} logPlanEx={logPlanEx} startRestTimer={startRestTimer}/>
           <ClientCalendar
             calMonth={calMonth} calYear={calYear}
             setCalMonth={setCalMonth} setCalYear={setCalYear}
@@ -2195,6 +2268,11 @@ function App(){
       {/* HABITS */}
       {view==="habits"&&(
         <HabitsTab client={client} habits={habits} setHabits={setHabits} habitLogs={habitLogs} setHabitLogs={setHabitLogs} toast_={toast_}/>
+      )}
+
+      {/* FILES */}
+      {view==="files"&&(
+        <FilesTab client={client} toast_={toast_}/>
       )}
 
       {/* MESSAGES */}
@@ -2348,7 +2426,7 @@ function App(){
       {view==="progress"&&<button className="fab" onClick={()=>setSProg(true)}>＋</button>}
 
       <div className="bnav">
-        {[{id:"today",i:"🌅",l:"Today"},{id:"plan",i:"📋",l:"Plan"},{id:"log",i:"🏋️",l:"Log"},{id:"food",i:"🍽️",l:"Food"},{id:"habits",i:"✅",l:"Habits"},{id:"messages",i:"💬",l:"Messages"},{id:"progress",i:"📈",l:"Progress"},{id:"stats",i:"🏆",l:"Stats"}].map(n=>{
+        {[{id:"today",i:"🌅",l:"Today"},{id:"plan",i:"📋",l:"Plan"},{id:"log",i:"🏋️",l:"Log"},{id:"food",i:"🍽️",l:"Food"},{id:"habits",i:"✅",l:"Habits"},{id:"files",i:"📁",l:"Files"},{id:"messages",i:"💬",l:"Messages"},{id:"progress",i:"📈",l:"Progress"},{id:"stats",i:"🏆",l:"Stats"}].map(n=>{
           const unread = n.id==="messages" ? messages.filter(m=>m.sender==="trainer"&&!m.read_at).length : 0;
           return (
           <button key={n.id} className={`bb ${view===n.id?"active":""}`} onClick={()=>setView(n.id)} style={{position:"relative"}}>
