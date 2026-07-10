@@ -1990,8 +1990,10 @@ function App(){
   const loadClientById = async (id) => {
     setLoading(true);
     try {
+      const cCheck = await api(`clients?id=eq.${id}&select=*`);
+      if(!cCheck.length){ setPinErr("Client not found"); sl("f4l_client_id",null); setLoading(false); return; }
+      if(cCheck[0].active === false){ setPinErr("This account is no longer active. Please contact your trainer."); sl("f4l_client_id",null); setClient(null); setLoading(false); return; }
       const results = await Promise.all([
-        api(`clients?id=eq.${id}&select=*`),
         api(`workout_logs?client_id=eq.${id}&order=created_at.desc`),
         api(`progress_logs?client_id=eq.${id}&order=date.desc`),
         api(`workout_plans?client_id=eq.${id}&order=day.asc`),
@@ -2003,16 +2005,14 @@ function App(){
         api(`progress_photos?client_id=eq.${id}&order=date.desc`),
         api(`optional_workouts?client_id=eq.${id}&order=created_at.desc`),
       ]);
-      const [c,l,pr,pl,dp,tn,msgs,habs,habLogs,photos,optWorkouts] = results;
-      if(c.length){
-        setClient(c[0]); setLogs(l); setProg(pr); setPlans(pl); setDatedPlans(dp||[]);
-        setTNote(tn[0]?.message||"");
-        setMessages(msgs||[]);
-        setHabits(habs||[]); setHabitLogs(habLogs||[]);
-        setProgressPhotos(photos||[]);
-        setOptionalWorkouts(optWorkouts||[]);
-        sl("f4l_client_id",id);
-      }
+      const [l,pr,pl,dp,tn,msgs,habs,habLogs,photos,optWorkouts] = results;
+      setClient(cCheck[0]); setLogs(l); setProg(pr); setPlans(pl); setDatedPlans(dp||[]);
+      setTNote(tn[0]?.message||"");
+      setMessages(msgs||[]);
+      setHabits(habs||[]); setHabitLogs(habLogs||[]);
+      setProgressPhotos(photos||[]);
+      setOptionalWorkouts(optWorkouts||[]);
+      sl("f4l_client_id",id);
     } catch(e){setPinErr("Could not connect. Check your connection.");}
     setLoading(false);
   };
@@ -2024,6 +2024,7 @@ function App(){
     try {
       const res = await api(`clients?pin=eq.${p}&select=*`);
       if(!res.length){setPinErr("PIN not found — check with your trainer");setLoading(false);return;}
+      if(res[0].active === false){setPinErr("This account is no longer active. Please contact your trainer.");setLoading(false);return;}
       await loadClientById(res[0].id);
     } catch(e){setPinErr("Connection error. Try again.");setLoading(false);}
   };
