@@ -1100,6 +1100,103 @@ function WorkoutHeatmap({logs}){
   );
 }
 
+function IntakeFormsSection({client, toast_}){
+  const [forms,setForms] = useState([]);
+  const [responses,setResponses] = useState([]);
+  const [loaded,setLoaded] = useState(false);
+  const [openFormId,setOpenFormId] = useState(null);
+  const [answers,setAnswers] = useState({});
+
+  useEffect(()=>{
+    if(!client) return;
+    api(`intake_form_shares?client_id=eq.${client.id}&select=form_id`).then(async shares=>{
+      if(!shares.length){ setForms([]); setLoaded(true); return; }
+      const ids = shares.map(s=>s.form_id).join(",");
+      const [formsData,respData] = await Promise.all([
+        api(`intake_forms?id=in.(${ids})&order=created_at.desc`),
+        api(`intake_form_responses?client_id=eq.${client.id}&form_id=in.(${ids})`)
+      ]);
+      setForms(formsData||[]);
+      setResponses(respData||[]);
+      setLoaded(true);
+    }).catch(()=>setLoaded(true));
+  },[client.id]);
+
+  const getResponse = (formId) => responses.find(r=>r.form_id===formId);
+
+  const openForm = (form) => {
+    const existing = getResponse(form.id);
+    setAnswers(existing ? {...existing.answers} : {});
+    setOpenFormId(form.id);
+  };
+
+  const submitForm = async (form) => {
+    const existing = getResponse(form.id);
+    try {
+      if(existing){
+        await api(`intake_form_responses?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({answers, submitted_at:new Date().toISOString()})});
+        setResponses(prev=>prev.map(r=>r.id===existing.id?{...r,answers}:r));
+      } else {
+        const saved = await api("intake_form_responses",{method:"POST",body:JSON.stringify({form_id:form.id, client_id:client.id, answers})});
+        if(saved&&saved[0]) setResponses(prev=>[...prev,saved[0]]);
+      }
+      setOpenFormId(null);
+      toast_("Form submitted ✓");
+    } catch(e){ toast_("Could not submit form"); }
+  };
+
+  if(!loaded || !forms.length) return null;
+
+  const inputStyle = {background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",marginBottom:10};
+
+  return (
+    <div className="card">
+      <div className="clbl">📋 Forms</div>
+      {forms.map(form=>{
+        const resp = getResponse(form.id);
+        const isOpen = openFormId===form.id;
+        return (
+          <div key={form.id} style={{marginBottom:10,paddingBottom:10,borderBottom:"1px solid var(--b1)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700}}>{form.name}</div>
+                <div style={{fontSize:10,color:resp?"var(--green)":"var(--gold)",marginTop:2}}>{resp?"✓ Completed":"⏳ Pending"}</div>
+              </div>
+              <button onClick={()=>isOpen?setOpenFormId(null):openForm(form)} style={{background:resp?"var(--s1)":"var(--teal3)",border:"1px solid "+(resp?"var(--b1)":"var(--teal)"),color:resp?"var(--muted)":"var(--teal2)",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{isOpen?"Close":resp?"Edit":"Fill Out"}</button>
+            </div>
+            {isOpen&&(
+              <div style={{marginTop:10}}>
+                {(form.questions||[]).map(q=>(
+                  <div key={q.id} style={{marginBottom:10}}>
+                    <div style={{fontSize:12,color:"var(--muted)",marginBottom:5}}>{q.text}</div>
+                    {q.type==="long_text"&&<textarea value={answers[q.id]||""} onChange={e=>setAnswers(prev=>({...prev,[q.id]:e.target.value}))} style={{...inputStyle,minHeight:70,resize:"vertical",marginBottom:0}}/>}
+                    {q.type==="short_text"&&<input value={answers[q.id]||""} onChange={e=>setAnswers(prev=>({...prev,[q.id]:e.target.value}))} style={{...inputStyle,marginBottom:0}}/>}
+                    {q.type==="yes_no"&&(
+                      <div style={{display:"flex",gap:8}}>
+                        {["Yes","No"].map(opt=>(
+                          <button key={opt} onClick={()=>setAnswers(prev=>({...prev,[q.id]:opt}))} style={{flex:1,padding:9,borderRadius:8,border:"1px solid "+(answers[q.id]===opt?"var(--teal)":"var(--b1)"),background:answers[q.id]===opt?"var(--teal3)":"var(--s1)",color:answers[q.id]===opt?"var(--teal2)":"var(--muted)",fontSize:13,fontWeight:700,cursor:"pointer"}}>{opt}</button>
+                        ))}
+                      </div>
+                    )}
+                    {q.type==="multiple_choice"&&(
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {(q.options||[]).map(opt=>(
+                          <button key={opt} onClick={()=>setAnswers(prev=>({...prev,[q.id]:opt}))} style={{padding:9,borderRadius:8,border:"1px solid "+(answers[q.id]===opt?"var(--teal)":"var(--b1)"),background:answers[q.id]===opt?"var(--teal3)":"var(--s1)",color:answers[q.id]===opt?"var(--teal2)":"var(--muted)",fontSize:13,fontWeight:600,cursor:"pointer",textAlign:"left"}}>{opt}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <button onClick={()=>submitForm(form)} style={{width:"100%",background:"linear-gradient(135deg,#186476,var(--teal))",color:"#fff",border:"none",borderRadius:8,padding:12,fontFamily:"'Clash Display',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>Submit</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function DailyCheckIn({client, toast_}){
   const [checkin,setCheckin] = useState(null);
   const [editing,setEditing] = useState(false);
@@ -2181,6 +2278,7 @@ function App(){
             <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:22,fontWeight:700,color:"white",marginBottom:4}}>{todayLogs.length===0?"Let's get to work":"Keep pushing! 🔥"}</div>
             <div style={{fontSize:12,color:"rgba(255,255,255,0.45)"}}>{todayLogs.length} exercise{todayLogs.length!==1?"s":""} today{todayVol>0?` · ${todayVol.toLocaleString()} lbs`:""}</div>
           </div>
+          <IntakeFormsSection client={client} toast_={toast_}/>
           <DailyCheckIn client={client} toast_={toast_}/>
           {client.calories>0&&(
             <div className="card">
