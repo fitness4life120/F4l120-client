@@ -1060,6 +1060,85 @@ function WorkoutHeatmap({logs}){
   );
 }
 
+function DailyCheckIn({client, toast_}){
+  const [checkin,setCheckin] = useState(null);
+  const [editing,setEditing] = useState(false);
+  const [mood,setMood] = useState(0);
+  const [energy,setEnergy] = useState(0);
+  const [sleep,setSleep] = useState("");
+  const [notes,setNotes] = useState("");
+  const [loaded,setLoaded] = useState(false);
+
+  useEffect(()=>{
+    if(!client) return;
+    api(`daily_checkins?client_id=eq.${client.id}&date=eq.${tod()}`).then(rows=>{
+      const row = rows && rows[0];
+      setCheckin(row||null);
+      if(row){ setMood(row.mood||0); setEnergy(row.energy||0); setSleep(row.sleep_hours!=null?String(row.sleep_hours):""); setNotes(row.notes||""); }
+      setLoaded(true);
+    }).catch(()=>setLoaded(true));
+  },[client.id]);
+
+  const save = async () => {
+    if(!mood && !energy && !sleep && !notes.trim()){ toast_("Add at least one thing before saving"); return; }
+    try {
+      if(checkin){
+        await api(`daily_checkins?id=eq.${checkin.id}`,{method:"PATCH",body:JSON.stringify({mood:mood||null, energy:energy||null, sleep_hours:sleep?+sleep:null, notes:notes.trim()})});
+        setCheckin({...checkin, mood, energy, sleep_hours:sleep?+sleep:null, notes:notes.trim()});
+      } else {
+        const saved = await api("daily_checkins",{method:"POST",body:JSON.stringify({client_id:client.id, date:tod(), mood:mood||null, energy:energy||null, sleep_hours:sleep?+sleep:null, notes:notes.trim()})});
+        setCheckin(saved[0]);
+      }
+      setEditing(false);
+      toast_("Checked in ✓");
+    } catch(e){ toast_("Could not save check-in"); }
+  };
+
+  if(!loaded) return null;
+
+  const MOODS = ["😞","😕","😐","🙂","😄"];
+  const ENERGY = ["🪫","🔋","🔋🔋","🔋🔋🔋","⚡"];
+  const inputStyle = {background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",marginBottom:10};
+
+  if(checkin && !editing){
+    return (
+      <div className="card">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div className="clbl" style={{marginBottom:0}}>✓ Checked In Today</div>
+          <span onClick={()=>setEditing(true)} style={{fontSize:11,color:"var(--teal2)",cursor:"pointer",textDecoration:"underline"}}>Edit</span>
+        </div>
+        <div style={{display:"flex",gap:18,fontSize:13,flexWrap:"wrap"}}>
+          {checkin.mood>0&&<div>Mood {MOODS[checkin.mood-1]}</div>}
+          {checkin.energy>0&&<div>Energy {ENERGY[checkin.energy-1]}</div>}
+          {checkin.sleep_hours&&<div>{checkin.sleep_hours}h sleep</div>}
+        </div>
+        {checkin.notes&&<div style={{fontSize:12,color:"var(--muted)",marginTop:6,fontStyle:"italic"}}>{checkin.notes}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="clbl">Daily Check-In</div>
+      <div style={{fontSize:11,color:"var(--muted)",marginBottom:6}}>Mood</div>
+      <div style={{display:"flex",gap:6,marginBottom:12}}>
+        {MOODS.map((m,i)=>(
+          <button key={i} onClick={()=>setMood(i+1)} style={{flex:1,fontSize:20,padding:8,borderRadius:8,border:"1px solid "+(mood===i+1?"var(--teal)":"var(--b1)"),background:mood===i+1?"var(--teal3)":"var(--s1)",cursor:"pointer"}}>{m}</button>
+        ))}
+      </div>
+      <div style={{fontSize:11,color:"var(--muted)",marginBottom:6}}>Energy</div>
+      <div style={{display:"flex",gap:6,marginBottom:12}}>
+        {ENERGY.map((e,i)=>(
+          <button key={i} onClick={()=>setEnergy(i+1)} style={{flex:1,fontSize:14,padding:8,borderRadius:8,border:"1px solid "+(energy===i+1?"var(--teal)":"var(--b1)"),background:energy===i+1?"var(--teal3)":"var(--s1)",cursor:"pointer"}}>{e}</button>
+        ))}
+      </div>
+      <input type="number" inputMode="decimal" step="0.5" placeholder="Hours of sleep last night" value={sleep} onChange={e=>setSleep(e.target.value)} style={inputStyle}/>
+      <input placeholder="How's it going? (optional)" value={notes} onChange={e=>setNotes(e.target.value)} style={inputStyle}/>
+      <button onClick={save} style={{width:"100%",background:"linear-gradient(135deg,#186476,var(--teal))",color:"#fff",border:"none",borderRadius:8,padding:12,fontFamily:"'Clash Display',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>Save Check-In</button>
+    </div>
+  );
+}
+
 function FoodTab({client, toast_}){
   const [nLogs,setNLogs] = useState([]);
   const [nDate,setNDate] = useState(tod());
@@ -2030,6 +2109,7 @@ function App(){
             <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:22,fontWeight:700,color:"white",marginBottom:4}}>{todayLogs.length===0?"Let's get to work":"Keep pushing! 🔥"}</div>
             <div style={{fontSize:12,color:"rgba(255,255,255,0.45)"}}>{todayLogs.length} exercise{todayLogs.length!==1?"s":""} today{todayVol>0?` · ${todayVol.toLocaleString()} lbs`:""}</div>
           </div>
+          <DailyCheckIn client={client} toast_={toast_}/>
           {client.calories>0&&(
             <div className="card">
               <div className="clbl">Your Daily Targets</div>
