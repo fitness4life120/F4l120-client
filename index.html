@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -635,10 +635,12 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
   const removeLogSetRow = (bi,i) => setLogEf(p=>{ const blocks=[...p.blocks]; blocks[bi]={...blocks[bi],setRows:blocks[bi].setRows.filter((_,idx)=>idx!==i)}; return {...p,blocks}; });
 
   const submitLog = async () => {
-    if(!logEf.blocks.some(b=>b.exercise.trim())) return;
-    await addEx(logEf);
-    setShowLogForm(false);
-    setLogEf({blocks:[blankBlock()],notes:"",date:today,from_plan:false,exerciseGroup:null});
+    if(!logEf.blocks.some(b=>b.exercise.trim())){ toast_("Enter an exercise name first"); return; }
+    const ok = await addEx(logEf);
+    if(ok){
+      setShowLogForm(false);
+      setLogEf({blocks:[blankBlock()],notes:"",date:today,from_plan:false,exerciseGroup:null});
+    }
   };
 
   return (
@@ -2042,9 +2044,9 @@ function App(){
 
   const addEx = async (overrideData) => {
     const data = overrideData || ef;
-    if(!client) return;
+    if(!client) return false;
     const validBlocks = (data.blocks||[]).filter(b=>b.exercise.trim());
-    if(!validBlocks.length) return;
+    if(!validBlocks.length){ toast_("Enter an exercise name first"); return false; }
     const groupId = validBlocks.length>1 ? (data.exerciseGroup || (Date.now().toString(36)+Math.random().toString(36).slice(2,6))) : null;
     const payload = [];
     validBlocks.forEach(b=>{
@@ -2057,7 +2059,7 @@ function App(){
         });
       });
     });
-    if(!payload.length){ toast_("Add at least one set"); return; }
+    if(!payload.length){ toast_("Add at least one set (enter reps or weight)"); return false; }
     try {
       await api("workout_logs",{method:"POST",body:JSON.stringify(payload)});
       const fresh = await api(`workout_logs?client_id=eq.${client.id}&order=created_at.desc`);
@@ -2067,7 +2069,8 @@ function App(){
         setSAE(false); setPEL(null);
       }
       toast_("Logged ✓ ("+payload.length+" set"+(payload.length!==1?"s":"")+")");
-    } catch(e){toast_("❌ Could not save");}
+      return true;
+    } catch(e){toast_("❌ Could not save: "+e.message); return false;}
   };
 
   const delEx = async (id) => {
