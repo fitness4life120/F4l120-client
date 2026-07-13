@@ -330,7 +330,7 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet}){
       <div style={{display:"flex",flexDirection:"column",gap:3,margin:"6px 0"}}>
         {group.sets.map((s,i)=>(
           <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,color:"var(--muted)"}}>
-            <span>Set {i+1}: {s.log_type==="time" ? `${s.reps||"?"} sec` : `${s.reps||"?"} reps`}{s.weight?` @ ${s.weight} lbs`:""}</span>
+            <span>Set {i+1}: {s.log_type==="time" ? `${s.reps||"?"} sec` : `${s.reps||"?"} reps`}{s.each_side?" each":""}{s.weight?` @ ${s.weight} lbs`:""}</span>
             <span onClick={()=>onDelSet(s.id)} style={{cursor:"pointer",textDecoration:"underline",fontSize:11}}>remove</span>
           </div>
         ))}
@@ -571,7 +571,7 @@ function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan, startRestTi
     <div style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}{ex.type==="time"&&<span style={{fontSize:9,color:"var(--gold)",background:"rgba(201,168,76,0.15)",borderRadius:3,padding:"1px 5px",marginLeft:4}}>TIME</span>}</div>
-        <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.weight?" @ "+ex.weight+" lbs":""}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
+        <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.each_side?" each":""}{ex.weight?" @ "+ex.weight+" lbs":""}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
         {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
       </div>
       {vidUrl&&<ExerciseVideo url={vidUrl}/>}
@@ -737,6 +737,7 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
                     <button onClick={()=>updateLogBlockField(bi,"type","reps")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:block.type!=="time"?"var(--teal)":"transparent",color:block.type!=="time"?"#fff":"var(--muted)"}}>Reps</button>
                     <button onClick={()=>updateLogBlockField(bi,"type","time")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:block.type==="time"?"var(--teal)":"transparent",color:block.type==="time"?"#fff":"var(--muted)"}}>Time</button>
                   </div>
+                  <label style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={!!block.eachSide} onChange={e=>updateLogBlockField(bi,"eachSide",e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Each side</span></label>
                   <div style={{fontFamily:"Barlow Condensed",fontSize:9,color:"var(--muted)",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Sets</div>
                   {block.setRows.map((row,i)=>(
                     <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
@@ -2055,22 +2056,26 @@ function App(){
           client_id:client.id, exercise:b.exercise.trim(), sets:1,
           reps:r.reps||"", weight:r.weight||"", muscle:b.muscle||"Full Body",
           notes:data.notes||"", date:data.date||new Date().toISOString().slice(0,10), from_plan:data.from_plan||false,
-          exercise_group: groupId, log_type: b.type==="time"?"time":"reps"
+          exercise_group: groupId, log_type: b.type==="time"?"time":"reps", each_side: !!b.eachSide
         });
       });
     });
     if(!payload.length){ toast_("Add at least one set (enter reps or weight)"); return false; }
     try {
       await api("workout_logs",{method:"POST",body:JSON.stringify(payload)});
+    } catch(e){ toast_("❌ Could not save: "+e.message); return false; }
+    // Save succeeded — refreshing the visible history list is best-effort from here on,
+    // and should never cause a real save to be reported as failed.
+    try {
       const fresh = await api(`workout_logs?client_id=eq.${client.id}&order=created_at.desc`);
       setLogs(fresh);
-      if(!overrideData){
-        setEf({blocks:[{exercise:"",muscle:"Chest",setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]}],notes:"",date:tod(),from_plan:false,exerciseGroup:null});
-        setSAE(false); setPEL(null);
-      }
-      toast_("Logged ✓ ("+payload.length+" set"+(payload.length!==1?"s":"")+")");
-      return true;
-    } catch(e){toast_("❌ Could not save: "+e.message); return false;}
+    } catch(e){ /* non-fatal — history list just won't refresh immediately */ }
+    if(!overrideData){
+      setEf({blocks:[{exercise:"",muscle:"Chest",setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]}],notes:"",date:tod(),from_plan:false,exerciseGroup:null});
+      setSAE(false); setPEL(null);
+    }
+    toast_("Logged ✓ ("+payload.length+" set"+(payload.length!==1?"s":"")+")");
+    return true;
   };
 
   const delEx = async (id) => {
@@ -2558,6 +2563,7 @@ function App(){
                   <button onClick={()=>updateEfBlockField(bi,"type","reps")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:block.type!=="time"?"var(--teal)":"transparent",color:block.type!=="time"?"#fff":"var(--muted)"}}>Reps</button>
                   <button onClick={()=>updateEfBlockField(bi,"type","time")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:block.type==="time"?"var(--teal)":"transparent",color:block.type==="time"?"#fff":"var(--muted)"}}>Time</button>
                 </div>
+                <label style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={!!block.eachSide} onChange={e=>updateEfBlockField(bi,"eachSide",e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Each side</span></label>
                 <div style={{fontFamily:"Barlow Condensed",fontSize:9,color:"var(--muted)",letterSpacing:1,textTransform:"uppercase",marginBottom:5,marginTop:8}}>Sets</div>
                 {block.setRows.map((row,i)=>(
                   <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
