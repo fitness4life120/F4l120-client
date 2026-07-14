@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -1290,6 +1290,9 @@ function FoodTab({client, toast_}){
   const [analyzing,setAnalyzing] = useState(false);
   const [result,setResult] = useState(null);
   const [waterLogs,setWaterLogs] = useState([]);
+  const [foodLibrary,setFoodLibrary] = useState([]);
+  const [librarySearch,setLibrarySearch] = useState("");
+  const [saveToLibrary,setSaveToLibrary] = useState(false);
   const [listening,setListening] = useState(false);
   const recognitionRef = useRef(null);
   const baseTextRef = useRef("");
@@ -1355,6 +1358,7 @@ function FoodTab({client, toast_}){
     if(!client) return;
     api(`nutrition_logs?client_id=eq.${client.id}&order=created_at.asc`).then(setNLogs).catch(()=>toast_("Could not load meals"));
     api(`water_logs?client_id=eq.${client.id}`).then(setWaterLogs).catch(()=>{});
+    api(`food_library?or=(client_id.is.null,client_id.eq.${client.id})&order=name.asc`).then(setFoodLibrary).catch(()=>{});
   },[client.id]);
 
   const waterToday = waterLogs.find(w=>w.date===nDate);
@@ -1419,9 +1423,38 @@ function FoodTab({client, toast_}){
         quality_notes: result.quality_notes, serving_note: result.serving_note
       })});
       if(saved && saved[0]) setNLogs(p=>[...p, saved[0]]);
-      setResult(null); setPhotoBase64(null); setPhotoMediaType(null); setMealText("");
-      toast_("Meal logged ✓");
+      if(saveToLibrary && !result.fromLibrary){
+        try {
+          const libRow = await api("food_library",{method:"POST",body:JSON.stringify({
+            client_id: client.id, name: result.meal_name, calories: result.calories,
+            protein: result.protein_g, carbs: result.carbs_g, fat: result.fat_g,
+            serving_note: result.serving_note || mealText.trim()
+          })});
+          if(libRow && libRow[0]) setFoodLibrary(p=>[...p, libRow[0]]);
+          toast_("Meal logged & saved to My Foods ✓");
+        } catch(e){ toast_("Meal logged ✓ (couldn't save to library)"); }
+      } else {
+        toast_("Meal logged ✓");
+      }
+      setResult(null); setPhotoBase64(null); setPhotoMediaType(null); setMealText(""); setSaveToLibrary(false);
     } catch(e){ toast_("❌ Could not save meal"); }
+  };
+
+  const selectFromLibrary = (item) => {
+    setResult({
+      meal_name: item.name, calories: item.calories, protein_g: item.protein,
+      carbs_g: item.carbs, fat_g: item.fat, fiber_g: null, quality_score: null,
+      quality_notes: null, serving_note: item.serving_note, fromLibrary: true
+    });
+    setMealText(item.name);
+  };
+
+  const deleteFromLibrary = async (id) => {
+    try {
+      await api(`food_library?id=eq.${id}`,{method:"DELETE"});
+      setFoodLibrary(p=>p.filter(f=>f.id!==id));
+      toast_("Removed from My Foods");
+    } catch(e){ toast_("Could not remove"); }
   };
 
   const deleteLog = async (id) => {
@@ -1538,6 +1571,7 @@ function FoodTab({client, toast_}){
             <button onClick={()=>setNMode("text")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="text"?"var(--teal)":"transparent",color:nMode==="text"?"#fff":"var(--muted)"}}>Text</button>
             {SpeechRecognitionAPI&&<button onClick={()=>setNMode("voice")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="voice"?"var(--teal)":"transparent",color:nMode==="voice"?"#fff":"var(--muted)"}}>🎤 Voice</button>}
             <button onClick={()=>setNMode("photo")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="photo"?"var(--teal)":"transparent",color:nMode==="photo"?"#fff":"var(--muted)"}}>Photo</button>
+            <button onClick={()=>setNMode("library")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="library"?"var(--teal)":"transparent",color:nMode==="library"?"#fff":"var(--muted)"}}>📚 My Foods</button>
           </div>
         </div>
 
@@ -1570,6 +1604,40 @@ function FoodTab({client, toast_}){
           </div>
         )}
 
+        {nMode==="library" ? (
+          <div>
+            <input placeholder="Search your foods…" value={librarySearch} onChange={e=>setLibrarySearch(e.target.value)} style={{background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",marginBottom:10}}/>
+            {(()=>{
+              const q = librarySearch.trim().toLowerCase();
+              const mine = foodLibrary.filter(f=>f.client_id===client.id && (!q||f.name.toLowerCase().includes(q)));
+              const common = foodLibrary.filter(f=>!f.client_id && (!q||f.name.toLowerCase().includes(q)));
+              const renderItem = (f, removable) => (
+                <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid var(--b1)"}}>
+                  <div onClick={()=>selectFromLibrary(f)} style={{flex:1,cursor:"pointer"}}>
+                    <div style={{fontSize:13,fontWeight:600}}>{f.name}</div>
+                    <div style={{fontSize:10,color:"var(--muted)",marginTop:1}}>{f.calories} cal · {f.protein}p / {f.carbs}c / {f.fat}f{f.serving_note?" · "+f.serving_note:""}</div>
+                  </div>
+                  {removable&&<button onClick={()=>deleteFromLibrary(f.id)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:14,cursor:"pointer",padding:"0 4px"}}>✕</button>}
+                </div>
+              );
+              return (
+                <>
+                  {mine.length>0&&(
+                    <div style={{marginBottom:14}}>
+                      <div style={{fontSize:10,color:"var(--gold)",letterSpacing:1,textTransform:"uppercase",fontWeight:700,marginBottom:4}}>My Saved Foods</div>
+                      {mine.map(f=>renderItem(f,true))}
+                    </div>
+                  )}
+                  <div>
+                    <div style={{fontSize:10,color:"var(--muted)",letterSpacing:1,textTransform:"uppercase",fontWeight:700,marginBottom:4}}>Common Foods</div>
+                    {common.length>0 ? common.map(f=>renderItem(f,false)) : <div style={{fontSize:12,color:"var(--muted)",fontStyle:"italic"}}>No matches</div>}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        ) : (
+          <>
         {nMode==="photo" ? (
           <input placeholder="Optional note..." value={mealText} onChange={e=>setMealText(e.target.value)} style={{background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",marginBottom:10}}/>
         ) : (
@@ -1580,6 +1648,8 @@ function FoodTab({client, toast_}){
           <button className="bp" style={{flex:1}} disabled={analyzing} onClick={runAnalysis}>{analyzing?"Analyzing…":"Analyze with AI"}</button>
           {(mealText.trim()||photoBase64)&&<button onClick={clearDraft} disabled={analyzing} style={{background:"var(--s1)",border:"1px solid var(--b1)",color:"var(--muted)",borderRadius:8,padding:"0 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕</button>}
         </div>
+          </>
+        )}
 
         {result&&(
           <div style={{marginTop:12,background:"var(--bg)",borderRadius:8,padding:14,border:"1px solid var(--teal)"}}>
@@ -1588,7 +1658,7 @@ function FoodTab({client, toast_}){
                 <div style={{fontWeight:700,fontSize:15}}>{result.meal_name}</div>
                 <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{result.serving_note||""}</div>
               </div>
-              <span style={{fontSize:11,fontWeight:700,color:result.quality_score>=8?"var(--green)":result.quality_score>=6?"var(--gold)":"var(--red)",background:"var(--soft)",padding:"2px 8px",borderRadius:10}}>{result.quality_score}/10</span>
+              {result.quality_score!=null&&<span style={{fontSize:11,fontWeight:700,color:result.quality_score>=8?"var(--green)":result.quality_score>=6?"var(--gold)":"var(--red)",background:"var(--soft)",padding:"2px 8px",borderRadius:10}}>{result.quality_score}/10</span>}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
               <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 4px"}}><div style={{fontSize:15,fontWeight:700}}>{result.calories}</div><div style={{fontSize:9,color:"var(--muted)"}}>Cal</div></div>
@@ -1597,6 +1667,7 @@ function FoodTab({client, toast_}){
               <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 4px"}}><div style={{fontSize:15,fontWeight:700,color:"#ef9a9a"}}>{result.fat_g}g</div><div style={{fontSize:9,color:"var(--muted)"}}>Fat</div></div>
             </div>
             {result.quality_notes&&<div style={{fontSize:12,color:"var(--muted)",fontStyle:"italic",marginBottom:10}}>{result.quality_notes}</div>}
+            {!result.fromLibrary&&<label style={{display:"flex",alignItems:"center",gap:6,marginBottom:10,cursor:"pointer"}}><input type="checkbox" checked={saveToLibrary} onChange={e=>setSaveToLibrary(e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Save to My Foods for quick reuse next time</span></label>}
             <button className="bp" onClick={confirmLog}>+ Add to Log</button>
           </div>
         )}
