@@ -1565,14 +1565,12 @@ function FoodTab({client, toast_}){
       </div>
 
       <div className="card">
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div className="clbl" style={{marginBottom:0}}>Log a Meal</div>
-          <div style={{display:"flex",gap:4,background:"var(--bg)",borderRadius:16,padding:3}}>
-            <button onClick={()=>setNMode("text")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="text"?"var(--teal)":"transparent",color:nMode==="text"?"#fff":"var(--muted)"}}>Text</button>
-            {SpeechRecognitionAPI&&<button onClick={()=>setNMode("voice")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="voice"?"var(--teal)":"transparent",color:nMode==="voice"?"#fff":"var(--muted)"}}>🎤 Voice</button>}
-            <button onClick={()=>setNMode("photo")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="photo"?"var(--teal)":"transparent",color:nMode==="photo"?"#fff":"var(--muted)"}}>Photo</button>
-            <button onClick={()=>setNMode("library")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="library"?"var(--teal)":"transparent",color:nMode==="library"?"#fff":"var(--muted)"}}>📚 My Foods</button>
-          </div>
+        <div className="clbl" style={{marginBottom:8}}>Log a Meal</div>
+        <div style={{display:"flex",gap:4,background:"var(--bg)",borderRadius:16,padding:3,marginBottom:10,flexWrap:"wrap"}}>
+          <button onClick={()=>setNMode("text")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="text"?"var(--teal)":"transparent",color:nMode==="text"?"#fff":"var(--muted)"}}>Text</button>
+          {SpeechRecognitionAPI&&<button onClick={()=>setNMode("voice")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="voice"?"var(--teal)":"transparent",color:nMode==="voice"?"#fff":"var(--muted)"}}>🎤 Voice</button>}
+          <button onClick={()=>setNMode("photo")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="photo"?"var(--teal)":"transparent",color:nMode==="photo"?"#fff":"var(--muted)"}}>Photo</button>
+          <button onClick={()=>setNMode("library")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:nMode==="library"?"var(--teal)":"transparent",color:nMode==="library"?"#fff":"var(--muted)"}}>📚 My Foods</button>
         </div>
 
         <select value={nMealTime} onChange={e=>setNMealTime(e.target.value)} style={{background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",marginBottom:10}}>
