@@ -1685,7 +1685,7 @@ function FoodTab({client, toast_}){
                   <div className="ex-top">
                     <span className="ex-name">{m.meal_name}</span>
                     {m.quality_score&&<span className="chip" style={{color:m.quality_score>=8?"var(--green)":m.quality_score>=6?"var(--gold)":"var(--red)"}}>{m.quality_score}/10</span>}
-                    <button className="del" onClick={()=>deleteLog(m.id)}>✕</button>
+                    <button onClick={()=>{ const item={id:m.id,name:m.meal_name,calories:m.calories,protein:m.protein_g,carbs:m.carbs_g,fat:m.fat_g,serving_note:m.meal_description||m.serving_note||""}; api("food_library",{method:"POST",body:JSON.stringify({client_id:client.id,name:item.name,calories:item.calories,protein:item.protein,carbs:item.carbs,fat:item.fat,serving_note:item.serving_note})}).then(r=>{if(r&&r[0])setFoodLibrary(p=>[...p,r[0]]);toast_("Saved to My Foods ✓");}).catch(()=>toast_("Could not save")); }} style={{background:"transparent",border:"none",color:"var(--teal2)",cursor:"pointer",fontSize:13,padding:"3px 5px",flexShrink:0}}>📚</button> <button className="del" onClick={()=>deleteLog(m.id)}>✕</button>
                   </div>
                   <div className="ex-bot">
                     <span className="chip t">{m.calories} kcal</span>
