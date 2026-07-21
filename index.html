@@ -1444,7 +1444,7 @@ function FoodTab({client, toast_}){
     setResult({
       meal_name: item.name, calories: item.calories, protein_g: item.protein,
       carbs_g: item.carbs, fat_g: item.fat, fiber_g: null, quality_score: null,
-      quality_notes: null, serving_note: item.serving_note, fromLibrary: true
+      quality_notes: null, serving_note: item.serving_note, fromLibrary: true, sourceLibraryId: item.id
     });
     setMealText(item.name);
   };
@@ -1499,6 +1499,44 @@ function FoodTab({client, toast_}){
   const avgFat = loggedCount ? Math.round(wTotals.fat_g/loggedCount) : 0;
   const wLabel = new Date(weekDates[0]+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})
     + " – " + new Date(weekDates[6]+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"});
+
+  const resultCard = result && (
+    <div style={{marginTop:12,background:"var(--bg)",borderRadius:8,padding:14,border:"1px solid var(--teal)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:15}}>{result.meal_name}</div>
+          <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{result.serving_note||""}</div>
+        </div>
+        {result.quality_score!=null&&<span style={{fontSize:11,fontWeight:700,color:result.quality_score>=8?"var(--green)":result.quality_score>=6?"var(--gold)":"var(--red)",background:"var(--soft)",padding:"2px 8px",borderRadius:10}}>{result.quality_score}/10</span>}
+      </div>
+      <div style={{fontSize:10,color:"var(--muted)",marginBottom:4}}>Tap any number to correct it if the AI got something wrong</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:10}}>
+        <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
+          <input type="number" value={result.calories} onChange={e=>setResult(r=>({...r,calories:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"var(--txt)",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
+          <div style={{fontSize:9,color:"var(--muted)"}}>Cal</div>
+        </div>
+        <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
+          <input type="number" value={result.protein_g} onChange={e=>setResult(r=>({...r,protein_g:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"#4fc3f7",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
+          <div style={{fontSize:9,color:"var(--muted)"}}>Pro (g)</div>
+        </div>
+        <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
+          <input type="number" value={result.carbs_g} onChange={e=>setResult(r=>({...r,carbs_g:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"#ffd54f",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
+          <div style={{fontSize:9,color:"var(--muted)"}}>Carb (g)</div>
+        </div>
+        <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
+          <input type="number" value={result.fat_g} onChange={e=>setResult(r=>({...r,fat_g:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"#ef9a9a",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
+          <div style={{fontSize:9,color:"var(--muted)"}}>Fat (g)</div>
+        </div>
+        <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
+          <input type="number" value={result.fiber_g||0} onChange={e=>setResult(r=>({...r,fiber_g:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"#a5d6a7",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
+          <div style={{fontSize:9,color:"var(--muted)"}}>Fiber (g)</div>
+        </div>
+      </div>
+      {result.quality_notes&&<div style={{fontSize:12,color:"var(--muted)",fontStyle:"italic",marginBottom:10}}>{result.quality_notes}</div>}
+      {!result.fromLibrary&&<label style={{display:"flex",alignItems:"center",gap:6,marginBottom:10,cursor:"pointer"}}><input type="checkbox" checked={saveToLibrary} onChange={e=>setSaveToLibrary(e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Save to My Foods for quick reuse next time</span></label>}
+      <button className="bp" onClick={confirmLog}>+ Add to Log</button>
+    </div>
+  );
 
   return (
     <div className="scroll">
@@ -1610,12 +1648,15 @@ function FoodTab({client, toast_}){
               const mine = foodLibrary.filter(f=>f.client_id===client.id && (!q||f.name.toLowerCase().includes(q)));
               const common = foodLibrary.filter(f=>!f.client_id && (!q||f.name.toLowerCase().includes(q)));
               const renderItem = (f, removable) => (
-                <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid var(--b1)"}}>
-                  <div onClick={()=>selectFromLibrary(f)} style={{flex:1,cursor:"pointer"}}>
-                    <div style={{fontSize:13,fontWeight:600}}>{f.name}</div>
-                    <div style={{fontSize:10,color:"var(--muted)",marginTop:1}}>{f.calories} cal · {f.protein}p / {f.carbs}c / {f.fat}f{f.serving_note?" · "+f.serving_note:""}</div>
+                <div key={f.id}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid var(--b1)"}}>
+                    <div onClick={()=>selectFromLibrary(f)} style={{flex:1,cursor:"pointer"}}>
+                      <div style={{fontSize:13,fontWeight:600}}>{f.name}</div>
+                      <div style={{fontSize:10,color:"var(--muted)",marginTop:1}}>{f.calories} cal · {f.protein}p / {f.carbs}c / {f.fat}f{f.serving_note?" · "+f.serving_note:""}</div>
+                    </div>
+                    {removable&&<button onClick={()=>deleteFromLibrary(f.id)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:14,cursor:"pointer",padding:"0 4px"}}>✕</button>}
                   </div>
-                  {removable&&<button onClick={()=>deleteFromLibrary(f.id)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:14,cursor:"pointer",padding:"0 4px"}}>✕</button>}
+                  {result&&result.sourceLibraryId===f.id&&resultCard}
                 </div>
               );
               return (
@@ -1649,43 +1690,7 @@ function FoodTab({client, toast_}){
           </>
         )}
 
-        {result&&(
-          <div style={{marginTop:12,background:"var(--bg)",borderRadius:8,padding:14,border:"1px solid var(--teal)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:15}}>{result.meal_name}</div>
-                <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{result.serving_note||""}</div>
-              </div>
-              {result.quality_score!=null&&<span style={{fontSize:11,fontWeight:700,color:result.quality_score>=8?"var(--green)":result.quality_score>=6?"var(--gold)":"var(--red)",background:"var(--soft)",padding:"2px 8px",borderRadius:10}}>{result.quality_score}/10</span>}
-            </div>
-            <div style={{fontSize:10,color:"var(--muted)",marginBottom:4}}>Tap any number to correct it if the AI got something wrong</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:10}}>
-              <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
-                <input type="number" value={result.calories} onChange={e=>setResult(r=>({...r,calories:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"var(--txt)",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
-                <div style={{fontSize:9,color:"var(--muted)"}}>Cal</div>
-              </div>
-              <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
-                <input type="number" value={result.protein_g} onChange={e=>setResult(r=>({...r,protein_g:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"#4fc3f7",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
-                <div style={{fontSize:9,color:"var(--muted)"}}>Pro (g)</div>
-              </div>
-              <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
-                <input type="number" value={result.carbs_g} onChange={e=>setResult(r=>({...r,carbs_g:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"#ffd54f",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
-                <div style={{fontSize:9,color:"var(--muted)"}}>Carb (g)</div>
-              </div>
-              <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
-                <input type="number" value={result.fat_g} onChange={e=>setResult(r=>({...r,fat_g:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"#ef9a9a",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
-                <div style={{fontSize:9,color:"var(--muted)"}}>Fat (g)</div>
-              </div>
-              <div style={{textAlign:"center",background:"var(--s1)",borderRadius:6,padding:"6px 2px"}}>
-                <input type="number" value={result.fiber_g||0} onChange={e=>setResult(r=>({...r,fiber_g:+e.target.value||0}))} style={{width:"100%",background:"transparent",border:"none",color:"#a5d6a7",fontSize:14,fontWeight:700,textAlign:"center",outline:"none"}}/>
-                <div style={{fontSize:9,color:"var(--muted)"}}>Fiber (g)</div>
-              </div>
-            </div>
-            {result.quality_notes&&<div style={{fontSize:12,color:"var(--muted)",fontStyle:"italic",marginBottom:10}}>{result.quality_notes}</div>}
-            {!result.fromLibrary&&<label style={{display:"flex",alignItems:"center",gap:6,marginBottom:10,cursor:"pointer"}}><input type="checkbox" checked={saveToLibrary} onChange={e=>setSaveToLibrary(e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Save to My Foods for quick reuse next time</span></label>}
-            <button className="bp" onClick={confirmLog}>+ Add to Log</button>
-          </div>
-        )}
+        {nMode!=="library" && resultCard}
       </div>
 
       {dayLogs.length===0 ? (
