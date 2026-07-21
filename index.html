@@ -605,12 +605,13 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
   const activePlan = selDatedPlan || selRecurPlan;
 
   const [showLogForm, setShowLogForm] = React.useState(false);
+  const [loggingGi, setLoggingGi] = React.useState(null);
   const blankBlock = () => ({exercise:"", muscle:"Full Body", type:"reps", setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]});
   const [logEf, setLogEf] = React.useState({blocks:[blankBlock()],notes:"",date:today,from_plan:false,exerciseGroup:null});
 
-  React.useEffect(()=>{ setShowLogForm(false); },[selDate]);
+  React.useEffect(()=>{ setShowLogForm(false); setLoggingGi(null); },[selDate]);
 
-  const logFromPlan = (ex) => {
+  const logFromPlan = (ex, gi) => {
     const groupMembers = ex.group ? (activePlan.exercises||[]).filter(e=>e.group===ex.group) : [ex];
     const blocks = groupMembers.map(e=>{
       const n = Math.max(1, parseInt(e.sets) || 1);
@@ -621,6 +622,7 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
     });
     setLogEf({blocks, notes:"", date:selDate||today, from_plan:true, exerciseGroup: ex.group||null});
     setShowLogForm(true);
+    setLoggingGi(gi!=null ? gi : "custom");
   };
 
   const updateLogBlockField = (bi,key,val) => {
@@ -639,9 +641,50 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
     const ok = await addEx(logEf);
     if(ok){
       setShowLogForm(false);
+      setLoggingGi(null);
       setLogEf({blocks:[blankBlock()],notes:"",date:today,from_plan:false,exerciseGroup:null});
     }
   };
+
+  const logFormJsx = (
+            <div style={{background:"var(--s2)",border:"1px solid var(--b1)",borderRadius:8,padding:12,marginTop:8}}>
+              <div style={{fontFamily:"Barlow Condensed",fontSize:10,fontWeight:700,letterSpacing:2,color:"var(--gold)",textTransform:"uppercase",marginBottom:10}}>
+                {logEf.blocks.length>1?(logEf.blocks.length>=3?"Circuit":"Superset")+" for "+selDate:"Log Exercise for "+selDate}
+              </div>
+              {logEf.blocks.map((block,bi)=>(
+                <div key={bi} style={{marginBottom:12,paddingBottom:bi<logEf.blocks.length-1?12:0,borderBottom:bi<logEf.blocks.length-1?"1px dashed var(--b1)":"none"}}>
+                  {logEf.blocks.length>1&&<div style={{fontSize:10,color:"var(--teal2)",fontWeight:700,marginBottom:4}}>Exercise {bi+1}</div>}
+                  <div style={{display:"flex",gap:6,marginBottom:8}}>
+                    <input placeholder="Exercise name" value={block.exercise} onChange={e=>updateLogBlockField(bi,"exercise",e.target.value)}
+                      style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"Barlow",fontSize:14,outline:"none"}}/>
+                    {logEf.blocks.length>1&&<button onClick={()=>removeLogBlock(bi)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:18,cursor:"pointer",padding:"0 6px",flexShrink:0}}>✕</button>}
+                  </div>
+                  <div style={{display:"flex",gap:4,background:"var(--bg)",borderRadius:16,padding:3,marginBottom:8,width:"fit-content"}}>
+                    <button onClick={()=>updateLogBlockField(bi,"type","reps")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:block.type!=="time"?"var(--teal)":"transparent",color:block.type!=="time"?"#fff":"var(--muted)"}}>Reps</button>
+                    <button onClick={()=>updateLogBlockField(bi,"type","time")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:block.type==="time"?"var(--teal)":"transparent",color:block.type==="time"?"#fff":"var(--muted)"}}>Time</button>
+                  </div>
+                  <label style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={!!block.eachSide} onChange={e=>updateLogBlockField(bi,"eachSide",e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Each side</span></label>
+                  <div style={{fontFamily:"Barlow Condensed",fontSize:9,color:"var(--muted)",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Sets</div>
+                  {block.setRows.map((row,i)=>(
+                    <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
+                      <div style={{width:20,fontSize:11,color:"var(--muted)",fontWeight:700,flexShrink:0}}>{i+1}</div>
+                      <input type={block.type==="time"?"text":"number"} inputMode={block.type==="time"?"text":"numeric"} placeholder={block.type==="time"?"e.g. 45 sec":"Reps"} value={row.reps} onChange={e=>updateLogSetRow(bi,i,"reps",e.target.value)}
+                        style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>
+                      <input type="number" inputMode="decimal" placeholder="Weight" value={row.weight} onChange={e=>updateLogSetRow(bi,i,"weight",e.target.value)}
+                        style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>
+                      {block.setRows.length>1&&<button onClick={()=>removeLogSetRow(bi,i)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0}}>✕</button>}
+                    </div>
+                  ))}
+                  <button onClick={()=>addLogSetRow(bi)} style={{width:"100%",background:"var(--s1)",border:"1px dashed var(--b1)",borderRadius:7,padding:8,color:"var(--muted)",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Add Set</button>
+                </div>
+              ))}
+              <button onClick={addLogBlock} style={{width:"100%",background:"var(--teal3)",border:"1px dashed var(--teal)",borderRadius:7,padding:8,color:"var(--teal2)",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:8}}>+ Add Exercise (Superset/Circuit)</button>
+              <button onClick={submitLog}
+                style={{width:"100%",background:"linear-gradient(135deg,#186476,var(--teal))",color:"white",border:"none",borderRadius:8,padding:12,fontFamily:"Barlow Condensed",fontSize:13,fontWeight:800,letterSpacing:1,textTransform:"uppercase",cursor:"pointer"}}>
+                Save {logEf.blocks.length>1?"All":"Exercise"}
+              </button>
+            </div>
+  );
 
   return (
     <>
@@ -698,7 +741,7 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
               <div style={{fontFamily:"Barlow Condensed",fontSize:11,fontWeight:700,letterSpacing:2,color:"var(--gold)",textTransform:"uppercase"}}>{selDayName} · {selDate}</div>
               <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:16,fontWeight:700,color:"var(--txt)",marginTop:2}}>{selDatedPlans.length>1?selDatedPlans.map((p,i)=>React.createElement("span",{key:i,onClick:()=>setDatedPlanChoice(p),style:{cursor:"pointer",padding:"5px 14px",borderRadius:6,marginRight:4,background:(datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"var(--teal)":"var(--s2)",border:"1px solid "+((datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"var(--teal)":"var(--b1)"),color:(datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"white":"var(--muted)",fontSize:12,fontWeight:700}},p.label)):selDatedPlans.length>1?selDatedPlans.map((p,i)=>React.createElement("span",{key:i,onClick:()=>setDatedPlanChoice(p),style:{cursor:"pointer",padding:"5px 14px",borderRadius:6,marginRight:4,background:(datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"var(--teal)":"var(--s2)",border:"1px solid "+((datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"var(--teal)":"var(--b1)"),color:(datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"white":"var(--muted)",fontSize:12,fontWeight:700}},p.label)):selDatedPlans.length>1?selDatedPlans.map((p,i)=>React.createElement("span",{key:i,onClick:()=>setDatedPlanChoice(p),style:{cursor:"pointer",padding:"5px 14px",borderRadius:6,marginRight:4,background:(datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"var(--teal)":"var(--s2)",border:"1px solid "+((datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"var(--teal)":"var(--b1)"),color:(datedPlanChoice?datedPlanChoice.label:selDatedPlans[0].label)===p.label?"white":"var(--muted)",fontSize:12,fontWeight:700}},p.label)):selDatedPlans.length>1?selDatedPlans.map((p,i)=>React.createElement("span",{key:i,onClick:()=>setDatedPlanChoice(p),style:{cursor:"pointer",display:"inline-block",marginRight:6,padding:"4px 12px",borderRadius:6,background:(datedPlanChoice||selDatedPlans[0]).label===p.label?"var(--teal)":"var(--s2)",border:"1px solid "+((datedPlanChoice||selDatedPlans[0]).label===p.label?"var(--teal)":"var(--b1)"),color:(datedPlanChoice||selDatedPlans[0]).label===p.label?"white":"var(--muted)",fontSize:12,fontWeight:700}},p.label)):activePlan?activePlan.label:"No Plan"}</div>
             </div>
-            <button onClick={()=>setShowLogForm(s=>!s)}
+            <button onClick={()=>{ if(showLogForm){ setShowLogForm(false); setLoggingGi(null); } else { setLogEf({blocks:[blankBlock()],notes:"",date:selDate||today,from_plan:false,exerciseGroup:null}); setShowLogForm(true); setLoggingGi("custom"); } }}
               style={{background:"linear-gradient(135deg,#186476,var(--teal))",color:"white",border:"none",borderRadius:8,padding:"9px 14px",fontFamily:"Barlow Condensed",fontSize:12,fontWeight:800,letterSpacing:1,textTransform:"uppercase",cursor:"pointer"}}>
               {showLogForm?"Close":"+ Log"}
             </button>
@@ -706,13 +749,21 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
 
           {activePlan&&groupExercisesByField(activePlan.exercises||[]).map((item,gi)=>{
             if(item.type==="single"){
-              return <ExPlanCard key={gi} ex={item.ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={logFromPlan} startRestTimer={startRestTimer}/>;
+              return (
+                <React.Fragment key={gi}>
+                  <ExPlanCard ex={item.ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={(ex)=>logFromPlan(ex,gi)} startRestTimer={startRestTimer}/>
+                  {showLogForm&&loggingGi===gi&&logFormJsx}
+                </React.Fragment>
+              );
             }
             return (
-              <div key={gi} style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
-                <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
-                {item.exercises.map((ex,i)=><ExPlanCard key={i} ex={ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={logFromPlan} startRestTimer={startRestTimer}/>)}
-              </div>
+              <React.Fragment key={gi}>
+                <div style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
+                  {item.exercises.map((ex,i)=><ExPlanCard key={i} ex={ex} logs={logs} selDate={selDate} exerciseVideos={exerciseVideos} logFromPlan={(ex)=>logFromPlan(ex,gi)} startRestTimer={startRestTimer}/>)}
+                </div>
+                {showLogForm&&loggingGi===gi&&logFormJsx}
+              </React.Fragment>
             );
           })}
 
@@ -720,45 +771,7 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
             <div style={{color:"var(--muted)",fontSize:12,fontStyle:"italic",textAlign:"center",padding:"8px 0"}}>No plan for this day — tap + Log to add a custom workout</div>
           )}
 
-          {showLogForm&&(
-            <div style={{background:"var(--s2)",border:"1px solid var(--b1)",borderRadius:8,padding:12,marginTop:8}}>
-              <div style={{fontFamily:"Barlow Condensed",fontSize:10,fontWeight:700,letterSpacing:2,color:"var(--gold)",textTransform:"uppercase",marginBottom:10}}>
-                {logEf.blocks.length>1?(logEf.blocks.length>=3?"Circuit":"Superset")+" for "+selDate:"Log Exercise for "+selDate}
-              </div>
-              {logEf.blocks.map((block,bi)=>(
-                <div key={bi} style={{marginBottom:12,paddingBottom:bi<logEf.blocks.length-1?12:0,borderBottom:bi<logEf.blocks.length-1?"1px dashed var(--b1)":"none"}}>
-                  {logEf.blocks.length>1&&<div style={{fontSize:10,color:"var(--teal2)",fontWeight:700,marginBottom:4}}>Exercise {bi+1}</div>}
-                  <div style={{display:"flex",gap:6,marginBottom:8}}>
-                    <input placeholder="Exercise name" value={block.exercise} onChange={e=>updateLogBlockField(bi,"exercise",e.target.value)}
-                      style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:11,color:"var(--txt)",fontFamily:"Barlow",fontSize:14,outline:"none"}}/>
-                    {logEf.blocks.length>1&&<button onClick={()=>removeLogBlock(bi)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:18,cursor:"pointer",padding:"0 6px",flexShrink:0}}>✕</button>}
-                  </div>
-                  <div style={{display:"flex",gap:4,background:"var(--bg)",borderRadius:16,padding:3,marginBottom:8,width:"fit-content"}}>
-                    <button onClick={()=>updateLogBlockField(bi,"type","reps")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:block.type!=="time"?"var(--teal)":"transparent",color:block.type!=="time"?"#fff":"var(--muted)"}}>Reps</button>
-                    <button onClick={()=>updateLogBlockField(bi,"type","time")} style={{padding:"5px 12px",borderRadius:13,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:block.type==="time"?"var(--teal)":"transparent",color:block.type==="time"?"#fff":"var(--muted)"}}>Time</button>
-                  </div>
-                  <label style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={!!block.eachSide} onChange={e=>updateLogBlockField(bi,"eachSide",e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Each side</span></label>
-                  <div style={{fontFamily:"Barlow Condensed",fontSize:9,color:"var(--muted)",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Sets</div>
-                  {block.setRows.map((row,i)=>(
-                    <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
-                      <div style={{width:20,fontSize:11,color:"var(--muted)",fontWeight:700,flexShrink:0}}>{i+1}</div>
-                      <input type={block.type==="time"?"text":"number"} inputMode={block.type==="time"?"text":"numeric"} placeholder={block.type==="time"?"e.g. 45 sec":"Reps"} value={row.reps} onChange={e=>updateLogSetRow(bi,i,"reps",e.target.value)}
-                        style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>
-                      <input type="number" inputMode="decimal" placeholder="Weight" value={row.weight} onChange={e=>updateLogSetRow(bi,i,"weight",e.target.value)}
-                        style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>
-                      {block.setRows.length>1&&<button onClick={()=>removeLogSetRow(bi,i)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0}}>✕</button>}
-                    </div>
-                  ))}
-                  <button onClick={()=>addLogSetRow(bi)} style={{width:"100%",background:"var(--s1)",border:"1px dashed var(--b1)",borderRadius:7,padding:8,color:"var(--muted)",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Add Set</button>
-                </div>
-              ))}
-              <button onClick={addLogBlock} style={{width:"100%",background:"var(--teal3)",border:"1px dashed var(--teal)",borderRadius:7,padding:8,color:"var(--teal2)",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:8}}>+ Add Exercise (Superset/Circuit)</button>
-              <button onClick={submitLog}
-                style={{width:"100%",background:"linear-gradient(135deg,#186476,var(--teal))",color:"white",border:"none",borderRadius:8,padding:12,fontFamily:"Barlow Condensed",fontSize:13,fontWeight:800,letterSpacing:1,textTransform:"uppercase",cursor:"pointer"}}>
-                Save {logEf.blocks.length>1?"All":"Exercise"}
-              </button>
-            </div>
-          )}
+          {showLogForm&&loggingGi==="custom"&&logFormJsx}
         </div>
       )}
 
