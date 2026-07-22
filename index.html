@@ -1498,18 +1498,19 @@ function FoodTab({client, toast_}){
   const wTotals = loggedDayGroups.reduce((acc,g)=>{
     const dt = g.reduce((a,m)=>{
       a.calories+=(+m.calories||0); a.protein_g+=(+m.protein_g||0);
-      a.carbs_g+=(+m.carbs_g||0); a.fat_g+=(+m.fat_g||0);
+      a.carbs_g+=(+m.carbs_g||0); a.fat_g+=(+m.fat_g||0); a.fiber_g+=(+m.fiber_g||0);
       return a;
-    },{calories:0,protein_g:0,carbs_g:0,fat_g:0});
+    },{calories:0,protein_g:0,carbs_g:0,fat_g:0,fiber_g:0});
     acc.calories+=dt.calories; acc.protein_g+=dt.protein_g;
-    acc.carbs_g+=dt.carbs_g; acc.fat_g+=dt.fat_g;
+    acc.carbs_g+=dt.carbs_g; acc.fat_g+=dt.fat_g; acc.fiber_g+=dt.fiber_g;
     return acc;
-  },{calories:0,protein_g:0,carbs_g:0,fat_g:0});
+  },{calories:0,protein_g:0,carbs_g:0,fat_g:0,fiber_g:0});
   const loggedCount = loggedDayGroups.length;
   const avgCal = loggedCount ? Math.round(wTotals.calories/loggedCount) : 0;
   const avgPro = loggedCount ? Math.round(wTotals.protein_g/loggedCount) : 0;
   const avgCarb = loggedCount ? Math.round(wTotals.carbs_g/loggedCount) : 0;
   const avgFat = loggedCount ? Math.round(wTotals.fat_g/loggedCount) : 0;
+  const avgFiber = loggedCount ? Math.round(wTotals.fiber_g/loggedCount) : 0;
   const wLabel = new Date(weekDates[0]+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})
     + " – " + new Date(weekDates[6]+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"});
 
@@ -1606,10 +1607,11 @@ function FoodTab({client, toast_}){
               <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:26,fontWeight:900,color:"var(--teal2)"}}>{avgCal}</div>
               <div style={{fontSize:11,color:"var(--muted)"}}>avg kcal/day · {loggedCount} of 7 days logged</div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
               <MacroBox label="Avg Protein" value={avgPro} goal={null} color="#4fc3f7"/>
               <MacroBox label="Avg Carbs" value={avgCarb} goal={null} color="#ffd54f"/>
               <MacroBox label="Avg Fat" value={avgFat} goal={null} color="#ef9a9a"/>
+              <MacroBox label="Avg Fiber" value={avgFiber} goal={null} color="#a5d6a7"/>
             </div>
           </>
         )}
