@@ -14,12 +14,12 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#070a0c;--s1:#0c1318;--s2:#111d24;--s3:#162530;
-  --b1:#1c3040;--b2:#254555;
+  --b1:#456d82;--b2:#4a7690;
   --teal:#1b8899;--teal2:#25b5cc;--teal3:rgba(27,136,153,0.15);
   --teal4:rgba(27,136,153,0.08);
   --gold:#c9a84c;--gold2:rgba(201,168,76,0.12);
   --green:#2dba80;--red:#e05252;
-  --txt:#d8eef4;--muted:#6a9aad;--soft:#1a3545;--r:10px;
+  --txt:#d8eef4;--muted:#9fc2d1;--soft:#1a3545;--r:10px;
 }
 html,body{height:100%;background:var(--bg);overflow:hidden;-webkit-tap-highlight-color:transparent}
 body{font-family:'Cabinet Grotesk',sans-serif;color:var(--txt)}
@@ -410,7 +410,7 @@ function drawRangeChart(canvasId, weeks, color){
     const y = pad.t+(cH/3)*i;
     ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
     const val = (maxV-((maxV-minV)/3)*i).toFixed(0);
-    ctx.fillStyle = "#3e6474"; ctx.font = "9px system-ui"; ctx.textAlign = "right";
+    ctx.fillStyle = "#9fc2d1"; ctx.font = "9px system-ui"; ctx.textAlign = "right";
     ctx.fillText(val, pad.l-4, y+3);
   }
   const slotW = cW / weeks.length;
@@ -424,7 +424,7 @@ function drawRangeChart(canvasId, weeks, color){
     ctx.beginPath(); ctx.arc(x,yAvg,3,0,Math.PI*2); ctx.fillStyle = "#fff"; ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = color; ctx.stroke();
     if(i===0 || i===weeks.length-1){
-      ctx.fillStyle = "#3e6474"; ctx.font = "9px system-ui"; ctx.textAlign = "center";
+      ctx.fillStyle = "#9fc2d1"; ctx.font = "9px system-ui"; ctx.textAlign = "center";
       ctx.fillText(new Date(w.weekStart+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}), x, H-4);
     }
   });
@@ -453,7 +453,7 @@ function drawLineChart(canvasId, data, color) {
     const y = pad.t + (cH/3)*i;
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W-pad.r, y); ctx.stroke();
     const val = (maxV - ((maxV-minV)/3)*i).toFixed(0);
-    ctx.fillStyle = "#3e6474"; ctx.font = "9px system-ui"; ctx.textAlign = "right";
+    ctx.fillStyle = "#9fc2d1"; ctx.font = "9px system-ui"; ctx.textAlign = "right";
     ctx.fillText(val, pad.l-4, y+3);
   }
   // Gradient
@@ -489,7 +489,7 @@ function drawLineChart(canvasId, data, color) {
     }
   });
   // X labels
-  ctx.fillStyle = "#3e6474"; ctx.font = "9px system-ui"; ctx.textAlign = "center";
+  ctx.fillStyle = "#9fc2d1"; ctx.font = "9px system-ui"; ctx.textAlign = "center";
   ctx.fillText(data[0].d.slice(5), pad.l, H-4);
   ctx.fillText(data[data.length-1].d.slice(5), W-pad.r, H-4);
 }
@@ -2265,7 +2265,7 @@ function App(){
         const y=pad.t+(cH/4)*i;
         ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
         const val=(maxW-((maxW-minW)/4)*i).toFixed(1);
-        ctx.fillStyle="#3e6474";
+        ctx.fillStyle="#9fc2d1";
         ctx.font="10px system-ui";
         ctx.textAlign="right";
         ctx.fillText(val,pad.l-6,y+3);
@@ -2299,7 +2299,7 @@ function App(){
         ctx.fillStyle="#22a8be";ctx.fill();
       });
       // X labels (first and last)
-      ctx.fillStyle="#3e6474";ctx.font="10px system-ui";ctx.textAlign="center";
+      ctx.fillStyle="#9fc2d1";ctx.font="10px system-ui";ctx.textAlign="center";
       ctx.fillText(sorted[0].date.slice(5),pad.l,H-6);
       ctx.fillText(sorted[sorted.length-1].date.slice(5),W-pad.r,H-6);
     },100);
