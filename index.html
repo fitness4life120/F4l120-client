@@ -1408,6 +1408,12 @@ function FoodTab({client, toast_}){
     setResult(null);
   };
 
+  const discardResult = () => {
+    setResult(null);
+    setMealText("");
+    setSaveToLibrary(false);
+  };
+
   const shiftDay = (n) => {
     const d = new Date(nDate); d.setDate(d.getDate()+n);
     setNDate(d.toISOString().slice(0,10));
@@ -1494,7 +1500,7 @@ function FoodTab({client, toast_}){
         carbs_g: Math.round(carb||0), fat_g: Math.round(fat||0), fiber_g: Math.round(fiber||0),
         quality_score: null, quality_notes: null,
         serving_note: hasServing ? (p.serving_size || "1 serving") : "per 100g — adjust for your actual serving",
-        fromLibrary: true
+        fromLibrary: false, fromScan: true
       });
       setMealText(p.product_name || "Scanned Product");
       setScanStatus("");
@@ -1619,7 +1625,10 @@ function FoodTab({client, toast_}){
       </div>
       {result.quality_notes&&<div style={{fontSize:12,color:"var(--muted)",fontStyle:"italic",marginBottom:10}}>{result.quality_notes}</div>}
       {!result.fromLibrary&&<label style={{display:"flex",alignItems:"center",gap:6,marginBottom:10,cursor:"pointer"}}><input type="checkbox" checked={saveToLibrary} onChange={e=>setSaveToLibrary(e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Save to My Foods for quick reuse next time</span></label>}
-      <button className="bp" onClick={confirmLog}>+ Add to Log</button>
+      <div style={{display:"flex",gap:8}}>
+        <button className="bp" style={{flex:1}} onClick={confirmLog}>+ Add to Log</button>
+        <button onClick={discardResult} style={{background:"rgba(224,82,82,0.15)",border:"1px solid rgba(224,82,82,0.3)",color:"var(--red)",borderRadius:8,padding:"0 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>🗑️</button>
+      </div>
     </div>
   );
 
