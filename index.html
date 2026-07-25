@@ -872,7 +872,7 @@ const NUTRITION_PROMPT_TEMPLATE = (description) => (
   "You are a precise sports nutrition expert. Analyze this meal and return ONLY a JSON object with no markdown, no preamble:\n\n"
   + description
   + "\n\nReturn this exact shape:\n"
-  + '{"meal_name":"short clean name","calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fiber_g":number,"serving_note":"brief portion context","quality_score":1-10,"quality_notes":"1 sentence on nutritional quality for a fitness/body recomp goal"}'
+  + '{"meal_name":"short clean name","calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fiber_g":number,"serving_note":"brief portion context","quality_score":1-10,"quality_notes":"1-2 SPECIFIC foods this person could add or swap in to meaningfully raise the score for a fitness/body recomp goal — name actual foods (e.g. \\"Add a cup of broccoli for fiber\\" or \\"Swap white rice for quinoa for more protein\\"), not generic advice. If the meal already scores 9-10, say so instead."}'
   + "\n\nBe accurate. Use standard food database values. Round to nearest whole number."
 );
 
@@ -1306,6 +1306,10 @@ function FoodTab({client, toast_}){
   const [waterLogs,setWaterLogs] = useState([]);
   const [foodLibrary,setFoodLibrary] = useState([]);
   const [scanning,setScanning] = useState(false);
+  const [expandedMealId,setExpandedMealId] = useState(null);
+  const [addingToMealId,setAddingToMealId] = useState(null);
+  const [forgottenText,setForgottenText] = useState("");
+  const [addingBusy,setAddingBusy] = useState(false);
   const [scanStatus,setScanStatus] = useState("");
   const codeReaderRef = useRef(null);
   const [librarySearch,setLibrarySearch] = useState("");
@@ -1553,6 +1557,25 @@ function FoodTab({client, toast_}){
       setNLogs(p=>p.filter(l=>l.id!==id));
       toast_("Removed");
     } catch(e){ toast_("Could not delete"); }
+  };
+
+  const addForgottenItem = async (meal) => {
+    if(!forgottenText.trim()){ toast_("Describe what you forgot first"); return; }
+    setAddingBusy(true);
+    try {
+      const combinedDescription = `${meal.meal_description || meal.meal_name}, plus also: ${forgottenText.trim()}`;
+      const r = await analyzeMealText(combinedDescription);
+      const updated = await api(`nutrition_logs?id=eq.${meal.id}`,{method:"PATCH",body:JSON.stringify({
+        meal_name: r.meal_name, meal_description: combinedDescription,
+        calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, fat_g: r.fat_g, fiber_g: r.fiber_g,
+        quality_score: r.quality_score, quality_notes: r.quality_notes, serving_note: r.serving_note
+      })});
+      if(updated && updated[0]) setNLogs(p=>p.map(l=>l.id===meal.id?updated[0]:l));
+      setAddingToMealId(null);
+      setForgottenText("");
+      toast_("Meal updated ✓");
+    } catch(e){ toast_("Could not update meal"); }
+    setAddingBusy(false);
   };
 
   const dayLogs = nLogs.filter(l=>l.date===nDate);
@@ -1815,17 +1838,47 @@ function FoodTab({client, toast_}){
               <div className="dh"><span className="dl">{mt}</span><div className="dline"/><span className="dc">{meals.length}</span></div>
               {meals.map(m=>(
                 <div key={m.id} className="ex-row">
-                  <div className="ex-top">
+                  <div className="ex-top" onClick={()=>setExpandedMealId(expandedMealId===m.id?null:m.id)} style={{cursor:"pointer"}}>
                     <span className="ex-name">{m.meal_name}</span>
                     {m.quality_score&&<span className="chip" style={{color:m.quality_score>=8?"var(--green)":m.quality_score>=6?"var(--gold)":"var(--red)"}}>{m.quality_score}/10</span>}
-                    <button onClick={()=>{ const item={id:m.id,name:m.meal_name,calories:m.calories,protein:m.protein_g,carbs:m.carbs_g,fat:m.fat_g,serving_note:m.meal_description||m.serving_note||""}; api("food_library",{method:"POST",body:JSON.stringify({client_id:client.id,name:item.name,calories:item.calories,protein:item.protein,carbs:item.carbs,fat:item.fat,serving_note:item.serving_note})}).then(r=>{if(r&&r[0])setFoodLibrary(p=>[...p,r[0]]);toast_("Saved to My Foods ✓");}).catch(()=>toast_("Could not save")); }} style={{background:"transparent",border:"none",color:"var(--teal2)",cursor:"pointer",fontSize:13,padding:"3px 5px",flexShrink:0}}>📚</button> <button className="del" onClick={()=>deleteLog(m.id)}>✕</button>
+                    <button onClick={(e)=>{ e.stopPropagation(); const item={id:m.id,name:m.meal_name,calories:m.calories,protein:m.protein_g,carbs:m.carbs_g,fat:m.fat_g,serving_note:m.meal_description||m.serving_note||""}; api("food_library",{method:"POST",body:JSON.stringify({client_id:client.id,name:item.name,calories:item.calories,protein:item.protein,carbs:item.carbs,fat:item.fat,serving_note:item.serving_note})}).then(r=>{if(r&&r[0])setFoodLibrary(p=>[...p,r[0]]);toast_("Saved to My Foods ✓");}).catch(()=>toast_("Could not save")); }} style={{background:"transparent",border:"none",color:"var(--teal2)",cursor:"pointer",fontSize:13,padding:"3px 5px",flexShrink:0}}>📚</button> <button className="del" onClick={(e)=>{e.stopPropagation();deleteLog(m.id);}}>✕</button>
                   </div>
-                  <div className="ex-bot">
+                  <div className="ex-bot" onClick={()=>setExpandedMealId(expandedMealId===m.id?null:m.id)} style={{cursor:"pointer"}}>
                     <span className="chip t">{m.calories} kcal</span>
                     <span className="chip">P {m.protein_g}g</span>
                     <span className="chip">C {m.carbs_g}g</span>
                     <span className="chip">F {m.fat_g}g</span>
                   </div>
+                  {expandedMealId===m.id&&(
+                    <div style={{background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:8,padding:12,marginTop:8}}>
+                      {m.meal_description&&<div style={{fontSize:12,color:"var(--txt)",marginBottom:8}}>{m.meal_description}</div>}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:8}}>
+                        <div style={{textAlign:"center"}}><div style={{fontSize:13,fontWeight:700}}>{m.calories}</div><div style={{fontSize:9,color:"var(--muted)"}}>Cal</div></div>
+                        <div style={{textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:"#4fc3f7"}}>{m.protein_g}g</div><div style={{fontSize:9,color:"var(--muted)"}}>Pro</div></div>
+                        <div style={{textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:"#ffd54f"}}>{m.carbs_g}g</div><div style={{fontSize:9,color:"var(--muted)"}}>Carb</div></div>
+                        <div style={{textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:"#ef9a9a"}}>{m.fat_g}g</div><div style={{fontSize:9,color:"var(--muted)"}}>Fat</div></div>
+                        <div style={{textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:"#a5d6a7"}}>{m.fiber_g||0}g</div><div style={{fontSize:9,color:"var(--muted)"}}>Fiber</div></div>
+                      </div>
+                      {m.serving_note&&<div style={{fontSize:11,color:"var(--muted)",marginBottom:6}}>{m.serving_note}</div>}
+                      {m.quality_notes&&(
+                        <div style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:6,padding:8,marginBottom:10}}>
+                          <div style={{fontSize:10,color:"var(--teal2)",fontWeight:700,textTransform:"uppercase",letterSpacing:0.5,marginBottom:2}}>Boost this score</div>
+                          <div style={{fontSize:12,color:"var(--txt)"}}>{m.quality_notes}</div>
+                        </div>
+                      )}
+                      {addingToMealId===m.id ? (
+                        <div>
+                          <input placeholder="What did you forget? e.g. a side of broccoli" value={forgottenText} onChange={e=>setForgottenText(e.target.value)} style={{background:"var(--s1)",border:"1.5px solid var(--b1)",borderRadius:8,padding:10,color:"var(--txt)",fontSize:13,outline:"none",width:"100%",marginBottom:8}}/>
+                          <div style={{display:"flex",gap:8}}>
+                            <button className="bp" style={{flex:1}} disabled={addingBusy} onClick={()=>addForgottenItem(m)}>{addingBusy?"Updating…":"Update Meal"}</button>
+                            <button onClick={()=>{setAddingToMealId(null);setForgottenText("");}} style={{background:"var(--s1)",border:"1px solid var(--b1)",color:"var(--muted)",borderRadius:8,padding:"0 14px",fontSize:13,cursor:"pointer"}}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={()=>setAddingToMealId(m.id)} style={{width:"100%",background:"var(--s1)",border:"1px dashed var(--b1)",color:"var(--muted)",borderRadius:8,padding:9,fontSize:12,fontWeight:700,cursor:"pointer"}}>➕ Add Something Forgotten</button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
