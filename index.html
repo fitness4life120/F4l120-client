@@ -1663,7 +1663,7 @@ function FoodTab({client, toast_}){
           <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:16,fontWeight:800}}>{nDayLabel(nDate)}</div>
           <div style={{fontSize:11,color:"var(--muted)"}}>{new Date(nDate+"T12:00:00").toLocaleDateString("en-US",{month:"long",day:"numeric"})}</div>
         </div>
-        <button className="bg_" style={{width:"auto",margin:0,padding:"9px 16px"}} disabled={nDate>=tod()} onClick={()=>shiftDay(1)}>Next</button>
+        <button className="bg_" style={{width:"auto",margin:0,padding:"9px 16px"}} onClick={()=>shiftDay(1)}>Next</button>
       </div>
 
       <div className="card">
@@ -2879,3 +2879,4 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
+
