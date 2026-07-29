@@ -1016,7 +1016,7 @@ function ProgressPhotoGallery({client, photos, setPhotos, toast_}){
           </div>
           <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:100,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)"}}>
             <div style={{fontSize:12,fontWeight:600}}>{uploading?"Uploading…":"Tap to take or upload a photo"}</div>
-            <input type="file" accept="image/*" capture="environment" disabled={uploading} style={{display:"none"}} onChange={e=>onFileSelected(e.target.files[0])}/>
+            <input type="file" accept="image/*" disabled={uploading} style={{display:"none"}} onChange={e=>onFileSelected(e.target.files[0])}/>
           </label>
         </div>
       )}
@@ -1769,7 +1769,7 @@ function FoodTab({client, toast_}){
             <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:130,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)",marginBottom:10}}>
               <div style={{fontSize:12,fontWeight:600}}>Tap to take or upload a photo</div>
               <div style={{fontSize:10,color:"var(--muted)",marginTop:2}}>of your meal or a nutrition label</div>
-              <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>onPhotoSelected(e.target.files[0])}/>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>onPhotoSelected(e.target.files[0])}/>
             </label>
           )
         )}
