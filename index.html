@@ -2377,7 +2377,16 @@ function App(){
       })});
       setProg(p=>[entry,...p].sort((a,b)=>b.date.localeCompare(a.date)));
       setSProg(false); setPf({date:tod(),weight:"",bf:"",notes:"",waist:"",chest:"",arms:"",hips:"",thighs:"",visceralFat:"",muscleMass:"",hangTime:"",vo2Max:""}); toast_("Progress saved ✓");
-    } catch(e){toast_("❌ Could not save");}
+    } catch(e){toast_("❌ Could not save: "+e.message);}
+  };
+
+  const deleteProg = async (id) => {
+    if(!confirm("Delete this check-in? This can't be undone.")) return;
+    try {
+      await api(`progress_logs?id=eq.${id}`,{method:"DELETE"});
+      setProg(p=>p.filter(x=>x.id!==id));
+      toast_("Check-in deleted");
+    } catch(e){ toast_("Could not delete: "+e.message); }
   };
 
   // Refresh logs from DB when switching to log tab
@@ -2741,6 +2750,7 @@ function App(){
                       {p.notes&&<div style={{fontSize:11,color:"var(--soft)",fontStyle:"italic"}}>{p.notes}</div>}
                     </div>
                     {d!==null&&<span className={+d<0?"delta-dn":"delta-up"}>{+d>0?"+":""}{d}</span>}
+                    <button onClick={()=>deleteProg(p.id)} style={{background:"rgba(224,82,82,0.15)",border:"1px solid rgba(224,82,82,0.3)",color:"var(--red)",cursor:"pointer",fontSize:12,padding:"4px 8px",borderRadius:5,flexShrink:0,marginLeft:8}}>✕</button>
                   </div>
                 );
               })
