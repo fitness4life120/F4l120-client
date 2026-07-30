@@ -872,8 +872,15 @@ const NUTRITION_PROMPT_TEMPLATE = (description) => (
   "You are a precise sports nutrition expert. Analyze this meal and return ONLY a JSON object with no markdown, no preamble:\n\n"
   + description
   + "\n\nReturn this exact shape:\n"
-  + '{"meal_name":"short clean name","calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fiber_g":number,"serving_note":"brief portion context","quality_score":1-10,"quality_notes":"1-2 SPECIFIC foods this person could add or swap in to meaningfully raise the score for a fitness/body recomp goal — name actual foods (e.g. \\"Add a cup of broccoli for fiber\\" or \\"Swap white rice for quinoa for more protein\\"), not generic advice. If the meal already scores 9-10, say so instead."}'
-  + "\n\nBe accurate. Use standard food database values. Round to nearest whole number."
+  + '{"meal_name":"short clean name","calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fiber_g":number,"serving_note":"brief portion context","serving_grams":number,"quality_score":1-10,"quality_notes":"1-2 SPECIFIC foods this person could add or swap in to meaningfully raise the score for a fitness/body recomp goal — name actual foods (e.g. \\"Add a cup of broccoli for fiber\\" or \\"Swap white rice for quinoa for more protein\\"), not generic advice. If the meal already scores 9-10, say so instead."}'
+  + "\n\nBe accurate. Use standard food database values. Round to nearest whole number. serving_grams should be your best estimate of the total weight of the described portion, in grams."
+);
+
+const GRADE_ONLY_PROMPT = (name, cal, pro, carb, fat, fiber) => (
+  "You are a precise sports nutrition expert. Grade the nutritional quality of this food for a fitness/body recomp goal. Return ONLY a JSON object with no markdown, no preamble:\n\n"
+  + `Food: ${name}\nCalories: ${cal}\nProtein: ${pro}g\nCarbs: ${carb}g\nFat: ${fat}g\nFiber: ${fiber||0}g\n\n`
+  + "Return this exact shape:\n"
+  + '{"quality_score":1-10,"quality_notes":"1-2 SPECIFIC foods this person could add or pair with this to meaningfully raise the score — name actual foods, not generic advice. If it already scores 9-10, say so instead."}'
 );
 
 const analyzeMealText = async (description) => {
@@ -881,6 +888,17 @@ const analyzeMealText = async (description) => {
     method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:1000,
       messages:[{role:"user", content:NUTRITION_PROMPT_TEMPLATE(`Meal: "${description}"`)}]})
+  });
+  const data = await res.json();
+  const raw = (data.content && data.content[0] && data.content[0].text) || "{}";
+  return JSON.parse(raw.replace(/```json|```/g,"").trim());
+};
+
+const gradeKnownMeal = async (name, cal, pro, carb, fat, fiber) => {
+  const res = await fetch(NUTRITION_PROXY_URL, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:400,
+      messages:[{role:"user", content:GRADE_ONLY_PROMPT(name, cal, pro, carb, fat, fiber)}]})
   });
   const data = await res.json();
   const raw = (data.content && data.content[0] && data.content[0].text) || "{}";
@@ -1466,7 +1484,7 @@ function FoodTab({client, toast_}){
         meal_name: result.meal_name, meal_description: mealText.trim(),
         calories: result.calories, protein_g: result.protein_g, carbs_g: result.carbs_g,
         fat_g: result.fat_g, fiber_g: result.fiber_g, quality_score: result.quality_score,
-        quality_notes: result.quality_notes, serving_note: result.serving_note
+        quality_notes: result.quality_notes, serving_note: result.serving_note, serving_grams: result.serving_grams||null
       })});
       if(saved && saved[0]) setNLogs(p=>[...p, saved[0]]);
       if(saveToLibrary && !result.fromLibrary){
@@ -1474,7 +1492,7 @@ function FoodTab({client, toast_}){
           const libRow = await api("food_library",{method:"POST",body:JSON.stringify({
             client_id: client.id, name: result.meal_name, calories: result.calories,
             protein: result.protein_g, carbs: result.carbs_g, fat: result.fat_g,
-            serving_note: result.serving_note || mealText.trim()
+            serving_note: result.serving_note || mealText.trim(), serving_grams: result.serving_grams||null
           })});
           if(libRow && libRow[0]) setFoodLibrary(p=>[...p, libRow[0]]);
           toast_("Meal logged & saved to My Foods ✓");
@@ -1512,15 +1530,21 @@ function FoodTab({client, toast_}){
       const carb = hasServing ? n["carbohydrates_serving"] : n["carbohydrates_100g"];
       const fat = hasServing ? n["fat_serving"] : n["fat_100g"];
       const fiber = hasServing ? n["fiber_serving"] : n["fiber_100g"];
+      const servingGrams = hasServing ? (p.serving_quantity || null) : 100;
+      const productName = p.product_name || "Scanned Product";
       setResult({
-        meal_name: p.product_name || "Scanned Product",
+        meal_name: productName,
         calories: Math.round(cal||0), protein_g: Math.round(pro||0),
         carbs_g: Math.round(carb||0), fat_g: Math.round(fat||0), fiber_g: Math.round(fiber||0),
         quality_score: null, quality_notes: null,
         serving_note: hasServing ? (p.serving_size || "1 serving") : "per 100g — adjust for your actual serving",
-        fromLibrary: false, fromScan: true
+        serving_grams: servingGrams,
+        fromLibrary: false, fromScan: true, grading: true
       });
-      setMealText(p.product_name || "Scanned Product");
+      setMealText(productName);
+      gradeKnownMeal(productName, Math.round(cal||0), Math.round(pro||0), Math.round(carb||0), Math.round(fat||0), Math.round(fiber||0))
+        .then(g => setResult(r => r && r.fromScan ? {...r, quality_score: g.quality_score, quality_notes: g.quality_notes, grading: false} : r))
+        .catch(() => setResult(r => r && r.fromScan ? {...r, grading: false} : r));
       setScanStatus("");
       stopBarcodeScan();
     } catch(e){
@@ -1552,9 +1576,13 @@ function FoodTab({client, toast_}){
     setResult({
       meal_name: item.name, calories: item.calories, protein_g: item.protein,
       carbs_g: item.carbs, fat_g: item.fat, fiber_g: null, quality_score: null,
-      quality_notes: null, serving_note: item.serving_note, fromLibrary: true, sourceLibraryId: item.id
+      quality_notes: null, serving_note: item.serving_note, serving_grams: item.serving_grams||null,
+      fromLibrary: true, sourceLibraryId: item.id, grading: true
     });
     setMealText(item.name);
+    gradeKnownMeal(item.name, item.calories, item.protein, item.carbs, item.fat, 0)
+      .then(g => setResult(r => r && r.sourceLibraryId===item.id ? {...r, quality_score: g.quality_score, quality_notes: g.quality_notes, grading: false} : r))
+      .catch(() => setResult(r => r && r.sourceLibraryId===item.id ? {...r, grading: false} : r));
   };
 
   const deleteFromLibrary = async (id) => {
@@ -1582,7 +1610,7 @@ function FoodTab({client, toast_}){
       const updated = await api(`nutrition_logs?id=eq.${meal.id}`,{method:"PATCH",body:JSON.stringify({
         meal_name: r.meal_name, meal_description: combinedDescription,
         calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, fat_g: r.fat_g, fiber_g: r.fiber_g,
-        quality_score: r.quality_score, quality_notes: r.quality_notes, serving_note: r.serving_note
+        quality_score: r.quality_score, quality_notes: r.quality_notes, serving_note: r.serving_note, serving_grams: r.serving_grams||null
       })});
       if(updated && updated[0]) setNLogs(p=>p.map(l=>l.id===meal.id?updated[0]:l));
       setAddingToMealId(null);
@@ -1633,9 +1661,13 @@ function FoodTab({client, toast_}){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
         <div>
           <div style={{fontWeight:700,fontSize:15}}>{result.meal_name}</div>
-          <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{result.serving_note||""}</div>
+          <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>
+            {result.serving_note||""}{result.serving_grams?(result.serving_note?" · ":"")+`${Math.round(result.serving_grams)}g (${(result.serving_grams/28.35).toFixed(1)} oz)`:""}
+          </div>
         </div>
-        {result.quality_score!=null&&<span style={{fontSize:11,fontWeight:700,color:result.quality_score>=8?"var(--green)":result.quality_score>=6?"var(--gold)":"var(--red)",background:"var(--soft)",padding:"2px 8px",borderRadius:10}}>{result.quality_score}/10</span>}
+        {result.grading
+          ? <span style={{fontSize:10,color:"var(--muted)",fontStyle:"italic",flexShrink:0}}>Grading…</span>
+          : result.quality_score!=null&&<span style={{fontSize:11,fontWeight:700,color:result.quality_score>=8?"var(--green)":result.quality_score>=6?"var(--gold)":"var(--red)",background:"var(--soft)",padding:"2px 8px",borderRadius:10}}>{result.quality_score}/10</span>}
       </div>
       <div style={{fontSize:10,color:"var(--muted)",marginBottom:4}}>Tap any number to correct it if the AI got something wrong</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:10}}>
@@ -1884,7 +1916,11 @@ function FoodTab({client, toast_}){
                         <div style={{textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:"#ef9a9a"}}>{m.fat_g}g</div><div style={{fontSize:9,color:"var(--muted)"}}>Fat</div></div>
                         <div style={{textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:"#a5d6a7"}}>{m.fiber_g||0}g</div><div style={{fontSize:9,color:"var(--muted)"}}>Fiber</div></div>
                       </div>
-                      {m.serving_note&&<div style={{fontSize:11,color:"var(--muted)",marginBottom:6}}>{m.serving_note}</div>}
+                      {(m.serving_note||m.serving_grams)&&
+                        <div style={{fontSize:11,color:"var(--muted)",marginBottom:6}}>
+                          {m.serving_note||""}{m.serving_grams?(m.serving_note?" · ":"")+`${Math.round(m.serving_grams)}g (${(m.serving_grams/28.35).toFixed(1)} oz)`:""}
+                        </div>
+                      }
                       {m.quality_notes&&(
                         <div style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:6,padding:8,marginBottom:10}}>
                           <div style={{fontSize:10,color:"var(--teal2)",fontWeight:700,textTransform:"uppercase",letterSpacing:0.5,marginBottom:2}}>Boost this score</div>
