@@ -1032,10 +1032,18 @@ function ProgressPhotoGallery({client, photos, setPhotos, toast_}){
               <button key={a} onClick={()=>setAngle(a)} style={{flex:1,padding:"8px 4px",borderRadius:8,border:"1px solid "+(angle===a?"var(--teal)":"var(--b1)"),background:angle===a?"var(--teal3)":"var(--s1)",color:angle===a?"var(--teal2)":"var(--muted)",fontSize:12,fontWeight:700,cursor:"pointer"}}>{a}</button>
             ))}
           </div>
-          <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:100,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)"}}>
-            <div style={{fontSize:12,fontWeight:600}}>{uploading?"Uploading…":"Tap to take or upload a photo"}</div>
-            <input type="file" accept="image/*" disabled={uploading} style={{display:"none"}} onChange={e=>onFileSelected(e.target.files[0])}/>
-          </label>
+          <div style={{display:"flex",gap:8}}>
+            <label style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:90,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)"}}>
+              <div style={{fontSize:20}}>📷</div>
+              <div style={{fontSize:11,fontWeight:600,marginTop:2}}>{uploading?"Uploading…":"Take Photo"}</div>
+              <input type="file" accept="image/*" capture="environment" disabled={uploading} style={{display:"none"}} onChange={e=>onFileSelected(e.target.files[0])}/>
+            </label>
+            <label style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:90,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)"}}>
+              <div style={{fontSize:20}}>🖼️</div>
+              <div style={{fontSize:11,fontWeight:600,marginTop:2}}>{uploading?"Uploading…":"Choose from Library"}</div>
+              <input type="file" accept="image/*" disabled={uploading} style={{display:"none"}} onChange={e=>onFileSelected(e.target.files[0])}/>
+            </label>
+          </div>
         </div>
       )}
 
@@ -1798,11 +1806,19 @@ function FoodTab({client, toast_}){
               <button onClick={()=>{setPhotoBase64(null);setPhotoMediaType(null);}} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.6)",color:"#fff",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer"}}>✕</button>
             </div>
           ) : (
-            <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:130,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)",marginBottom:10}}>
-              <div style={{fontSize:12,fontWeight:600}}>Tap to take or upload a photo</div>
-              <div style={{fontSize:10,color:"var(--muted)",marginTop:2}}>of your meal or a nutrition label</div>
-              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>onPhotoSelected(e.target.files[0])}/>
-            </label>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <label style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:110,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)"}}>
+                <div style={{fontSize:20}}>📷</div>
+                <div style={{fontSize:11,fontWeight:600,marginTop:2}}>Take Photo</div>
+                <div style={{fontSize:9,color:"var(--muted)",marginTop:2,textAlign:"center",padding:"0 6px"}}>of your meal or a label</div>
+                <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>onPhotoSelected(e.target.files[0])}/>
+              </label>
+              <label style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:110,border:"2px dashed var(--b1)",borderRadius:10,cursor:"pointer",color:"var(--muted)",background:"var(--bg)"}}>
+                <div style={{fontSize:20}}>🖼️</div>
+                <div style={{fontSize:11,fontWeight:600,marginTop:2}}>Choose from Library</div>
+                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>onPhotoSelected(e.target.files[0])}/>
+              </label>
+            </div>
           )
         )}
 
