@@ -495,6 +495,98 @@ function drawLineChart(canvasId, data, color) {
   ctx.fillText(data[data.length-1].d.slice(5), W-pad.r, H-4);
 }
 
+function getStepsAverages(waterLogs, period){
+  const groups = {};
+  waterLogs.forEach(w=>{
+    if(w.steps==null) return;
+    const d = new Date(w.date+"T12:00:00");
+    let key, label;
+    if(period==="weekly"){
+      const dow = d.getDay();
+      const diffToMon = dow===0?-6:1-dow;
+      const monday = new Date(d); monday.setDate(d.getDate()+diffToMon);
+      key = monday.toISOString().slice(0,10);
+      label = monday.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+    } else if(period==="monthly"){
+      key = w.date.slice(0,7);
+      label = new Date(key+"-01T12:00:00").toLocaleDateString("en-US",{month:"short",year:"2-digit"});
+    } else {
+      key = w.date.slice(0,4);
+      label = key;
+    }
+    if(!groups[key]) groups[key] = {sum:0, count:0, label};
+    groups[key].sum += (+w.steps);
+    groups[key].count++;
+  });
+  return Object.keys(groups).sort().map(k=>({
+    key:k, label:groups[k].label, avg: Math.round(groups[k].sum/groups[k].count)
+  }));
+}
+
+function drawStepsChart(canvasId, data, color){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || data.length < 1) return;
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width*dpr;
+  canvas.height = 160*dpr;
+  ctx.scale(dpr,dpr);
+  const W = rect.width, H = 160;
+  const pad = {t:20, r:14, b:28, l:44};
+  const cW = W-pad.l-pad.r, cH = H-pad.t-pad.b;
+  const vals = data.map(d=>d.avg);
+  const minV = Math.min(0, Math.min(...vals));
+  const maxV = Math.max(...vals)*1.15 || 1000;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = "rgba(28,48,64,0.8)"; ctx.lineWidth = 1;
+  for(let i=0;i<=3;i++){
+    const y = pad.t+(cH/3)*i;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
+    const val = Math.round(maxV-((maxV-minV)/3)*i).toLocaleString();
+    ctx.fillStyle = "#9fc2d1"; ctx.font = "9px system-ui"; ctx.textAlign = "right";
+    ctx.fillText(val, pad.l-4, y+3);
+  }
+  if(data.length===1){
+    const x = pad.l+cW/2;
+    const y = pad.t+cH-((data[0].avg-minV)/(maxV-minV))*cH;
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fillStyle = color; ctx.fill();
+    ctx.fillStyle = color; ctx.font = "bold 11px system-ui"; ctx.textAlign = "center";
+    ctx.fillText(data[0].avg.toLocaleString(), x, y-10);
+  } else {
+    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t+cH);
+    grad.addColorStop(0, color+"4D");
+    grad.addColorStop(1, color+"00");
+    ctx.beginPath();
+    data.forEach((d,i)=>{
+      const x = pad.l + (i/(data.length-1))*cW;
+      const y = pad.t + cH - ((d.avg-minV)/(maxV-minV))*cH;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.lineTo(pad.l+cW, pad.t+cH); ctx.lineTo(pad.l, pad.t+cH); ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = "round";
+    data.forEach((d,i)=>{
+      const x = pad.l + (i/(data.length-1))*cW;
+      const y = pad.t + cH - ((d.avg-minV)/(maxV-minV))*cH;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    data.forEach((d,i)=>{
+      const x = pad.l + (i/(data.length-1))*cW;
+      const y = pad.t + cH - ((d.avg-minV)/(maxV-minV))*cH;
+      ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle = color; ctx.fill();
+      if(i===data.length-1){
+        ctx.fillStyle = color; ctx.font = "bold 10px system-ui"; ctx.textAlign = "center";
+        ctx.fillText(d.avg.toLocaleString(), x, y-8);
+      }
+    });
+  }
+  ctx.fillStyle = "#9fc2d1"; ctx.font = "9px system-ui"; ctx.textAlign = "center";
+  ctx.fillText(data[0].label, pad.l, H-4);
+  if(data.length>1) ctx.fillText(data[data.length-1].label, W-pad.r, H-4);
+}
+
 const CHART_COLORS = ["#22a8be","#C9A84C","#2dba80","#e07a52","#a86bcc","#52b0e0"];
 
 function groupExercisesByField(exercises){
@@ -2259,6 +2351,8 @@ function App(){
   const [toast,setToast]     = useState(null);
   const [logs,setLogs]       = useState([]);
   const [progress,setProg]   = useState([]);
+  const [stepsLogs,setStepsLogs] = useState([]);
+  const [stepsPeriod,setStepsPeriod] = useState("weekly");
   const [plans,setPlans]     = useState([]);
   const [datedPlans,setDatedPlans] = useState([]);
   const [calMonth,setCalMonth] = useState(new Date().getMonth());
@@ -2339,14 +2433,16 @@ function App(){
         api(`habit_logs?client_id=eq.${id}&order=date.desc`),
         api(`progress_photos?client_id=eq.${id}&order=date.desc`),
         api(`optional_workouts?client_id=eq.${id}&order=created_at.desc`),
+        api(`water_logs?client_id=eq.${id}&order=date.asc`),
       ]);
-      const [l,pr,pl,dp,tn,msgs,habs,habLogs,photos,optWorkouts] = results;
+      const [l,pr,pl,dp,tn,msgs,habs,habLogs,photos,optWorkouts,waterData] = results;
       setClient(cCheck[0]); setLogs(l); setProg(pr); setPlans(pl); setDatedPlans(dp||[]);
       setTNote(tn[0]?.message||"");
       setMessages(msgs||[]);
       setHabits(habs||[]); setHabitLogs(habLogs||[]);
       setProgressPhotos(photos||[]);
       setOptionalWorkouts(optWorkouts||[]);
+      setStepsLogs(waterData||[]);
       sl("f4l_client_id",id);
     } catch(e){setPinErr("Could not connect. Check your connection.");}
     setLoading(false);
@@ -2552,6 +2648,14 @@ function App(){
     if(weeks.length<1) return;
     setTimeout(()=>{ drawRangeChart("weeklyWeightChart", weeks, "#22a8be"); },100);
   },[progress,view]);
+
+  // Draw steps chart
+  React.useEffect(()=>{
+    if(view!=="progress") return;
+    const data = getStepsAverages(stepsLogs, stepsPeriod);
+    if(data.length<1) return;
+    setTimeout(()=>{ drawStepsChart("stepsChart", data, "#a86bcc"); },100);
+  },[stepsLogs,stepsPeriod,view]);
   const prevP     = progress[1];
   const wDelta    = latestP&&prevP?(latestP.weight-prevP.weight).toFixed(1):null;
 
@@ -2755,6 +2859,20 @@ function App(){
               <div className="clbl">Weekly Weight Range</div>
               <div style={{fontSize:11,color:"var(--muted)",marginBottom:8}}>Each bar spans your lowest to highest weigh-in that week; the dot marks your average</div>
               <canvas id="weeklyWeightChart" style={{width:"100%",height:"160px",display:"block"}}></canvas>
+            </div>
+          )}
+          {getStepsAverages(stepsLogs,stepsPeriod).length>=1&&(
+            <div className="card">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div className="clbl" style={{marginBottom:0}}>Steps</div>
+                <div style={{display:"flex",gap:4,background:"var(--bg)",borderRadius:16,padding:3}}>
+                  {["weekly","monthly","yearly"].map(p=>(
+                    <button key={p} onClick={()=>setStepsPeriod(p)} style={{padding:"5px 10px",borderRadius:13,border:"none",cursor:"pointer",fontSize:10,fontWeight:700,textTransform:"capitalize",background:stepsPeriod===p?"var(--teal)":"transparent",color:stepsPeriod===p?"#fff":"var(--muted)"}}>{p}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{fontSize:11,color:"var(--muted)",marginBottom:8}}>Average daily steps per {stepsPeriod==="weekly"?"week":stepsPeriod==="monthly"?"month":"year"}</div>
+              <canvas id="stepsChart" style={{width:"100%",height:"160px",display:"block"}}></canvas>
             </div>
           )}
           {progress.length>=2&&(
