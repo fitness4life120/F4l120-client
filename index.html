@@ -251,13 +251,16 @@ function getYouTubeId(url){
   return m ? m[1] : null;
 }
 
+var INVERTED_PR_EXERCISES = new Set(["Assisted Dips", "Assisted Pull Ups"]);
+
 function getExercisePR(logs, exerciseName){
   let best = null;
+  const inverted = INVERTED_PR_EXERCISES.has(exerciseName);
   (logs||[]).forEach(l=>{
     if(l.exercise!==exerciseName) return;
     const w = +l.weight||0;
     if(w<=0) return;
-    if(!best || w>best.weight) best = {weight:w, reps:l.reps, log_type:l.log_type};
+    if(!best || (inverted ? w<best.weight : w>best.weight)) best = {weight:w, reps:l.reps, log_type:l.log_type};
   });
   return best;
 }
@@ -893,8 +896,9 @@ function StrengthProgress({logs}) {
   [...logs].reverse().forEach(l => {
     if(!l.exercise || !l.weight || +l.weight === 0) return;
     if(!exMap[l.exercise]) exMap[l.exercise] = [];
+    const inverted = INVERTED_PR_EXERCISES.has(l.exercise);
     const existing = exMap[l.exercise].find(e => e.d === l.date);
-    if(!existing || +l.weight > existing.v) {
+    if(!existing || (inverted ? +l.weight < existing.v : +l.weight > existing.v)) {
       exMap[l.exercise] = exMap[l.exercise].filter(e => e.d !== l.date);
       exMap[l.exercise].push({d: l.date, v: +l.weight});
     }
@@ -915,7 +919,8 @@ function StrengthProgress({logs}) {
   const data = exMap[active] || [];
   const first = data[0];
   const last = data[data.length-1];
-  const gain = last && first ? (last.v - first.v).toFixed(1) : null;
+  const activeInverted = INVERTED_PR_EXERCISES.has(active);
+  const gain = last && first ? (activeInverted ? (first.v - last.v) : (last.v - first.v)).toFixed(1) : null;
 
   return (
     <div className="card" style={{marginBottom:10}}>
@@ -2976,7 +2981,11 @@ function App(){
             <div className="clbl">Personal Records</div>
             {(()=>{
               const b={};
-              logs.forEach(e=>{if(e.weight&&(!b[e.exercise]||+e.weight>+b[e.exercise]))b[e.exercise]=e.weight;});
+              logs.forEach(e=>{
+                if(!e.weight) return;
+                const inverted = INVERTED_PR_EXERCISES.has(e.exercise);
+                if(!b[e.exercise] || (inverted ? +e.weight<+b[e.exercise] : +e.weight>+b[e.exercise])) b[e.exercise]=e.weight;
+              });
               const ent=Object.entries(b).sort((a,c_)=>c_[1]-a[1]).slice(0,10);
               return ent.length?ent.map(([ex,w])=>(
                 <div key={ex} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid var(--b1)"}}>
