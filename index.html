@@ -251,16 +251,20 @@ function getYouTubeId(url){
   return m ? m[1] : null;
 }
 
+function normalizeExName(name) {
+  return (name||"").trim().toLowerCase().replace(/[-_]/g," ").replace(/\s+/g," ");
+}
 var INVERTED_PR_EXERCISES = new Set(["assisted dips", "assisted pull ups"]);
 function isInvertedPRExercise(name) {
-  return INVERTED_PR_EXERCISES.has((name||"").trim().toLowerCase().replace(/[-_]/g," ").replace(/\s+/g," "));
+  return INVERTED_PR_EXERCISES.has(normalizeExName(name));
 }
 
 function getExercisePR(logs, exerciseName){
   let best = null;
   const inverted = isInvertedPRExercise(exerciseName);
+  const targetNorm = normalizeExName(exerciseName);
   (logs||[]).forEach(l=>{
-    if(l.exercise!==exerciseName) return;
+    if(normalizeExName(l.exercise)!==targetNorm) return;
     const w = +l.weight||0;
     if(w<=0) return;
     if(!best || (inverted ? w<best.weight : w>best.weight)) best = {weight:w, reps:l.reps, log_type:l.log_type};
