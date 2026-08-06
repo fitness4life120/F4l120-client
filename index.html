@@ -2365,6 +2365,7 @@ function App(){
   const [progress,setProg]   = useState([]);
   const [stepsLogs,setStepsLogs] = useState([]);
   const [stepsPeriod,setStepsPeriod] = useState("weekly");
+  const [prSearch,setPrSearch] = useState("");
   const [plans,setPlans]     = useState([]);
   const [datedPlans,setDatedPlans] = useState([]);
   const [calMonth,setCalMonth] = useState(new Date().getMonth());
@@ -2986,6 +2987,7 @@ function App(){
           </div>
           <div className="card">
             <div className="clbl">Personal Records</div>
+            <input placeholder="🔍 Search exercises…" value={prSearch} onChange={e=>setPrSearch(e.target.value)} style={{background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:10,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",marginBottom:10}}/>
             {(()=>{
               const b={};
               logs.forEach(e=>{
@@ -2993,13 +2995,15 @@ function App(){
                 const inverted = isInvertedPRExercise(e.exercise);
                 if(!b[e.exercise] || (inverted ? +e.weight<+b[e.exercise] : +e.weight>+b[e.exercise])) b[e.exercise]=e.weight;
               });
-              const ent=Object.entries(b).sort((a,c_)=>c_[1]-a[1]).slice(0,10);
+              const q = prSearch.trim().toLowerCase();
+              let ent = Object.entries(b).sort((a,c_)=>c_[1]-a[1]);
+              ent = q ? ent.filter(([ex])=>ex.toLowerCase().includes(q)) : ent.slice(0,10);
               return ent.length?ent.map(([ex,w])=>(
                 <div key={ex} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid var(--b1)"}}>
                   <span style={{fontSize:13,fontWeight:500}}>{ex}</span>
                   <span style={{fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,color:"var(--teal2)"}}>{w} lbs</span>
                 </div>
-              )):<div style={{color:"var(--muted)",fontSize:12,fontStyle:"italic"}}>No PRs yet</div>;
+              )):<div style={{color:"var(--muted)",fontSize:12,fontStyle:"italic"}}>{q?"No matching exercises":"No PRs yet"}</div>;
             })()}
           </div>
         </div>
