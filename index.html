@@ -987,18 +987,19 @@ const GRADE_ONLY_PROMPT = (name, cal, pro, carb, fat, fiber) => (
   + '{"quality_score":1-10,"quality_notes":"1-2 SPECIFIC foods this person could add or pair with this to meaningfully raise the score — name actual foods, not generic advice. If it already scores 9-10, say so instead."}'
 );
 
-const DAY_ANALYSIS_PROMPT = (mealsSummary, totals) => (
-  "You are a precise sports nutrition expert. Analyze this person's FULL DAY of eating as a whole — not meal by meal — for a fitness/body recomp goal. Return ONLY a JSON object with no markdown, no preamble:\n\n"
-  + `Meals logged today:\n${mealsSummary}\n\nDaily totals: ${totals.calories} cal, ${totals.protein_g}g protein, ${totals.carbs_g}g carbs, ${totals.fat_g}g fat, ${totals.fiber_g}g fiber\n\n`
+const DAY_ANALYSIS_PROMPT = (mealsSummary, totals, goals) => (
+  "You are a precise sports nutrition expert. Analyze this person's FULL DAY of eating as a whole — not meal by meal — measured specifically against their personal daily targets. Return ONLY a JSON object with no markdown, no preamble:\n\n"
+  + `Meals logged today:\n${mealsSummary}\n\nActual totals: ${totals.calories} cal, ${totals.protein_g}g protein, ${totals.carbs_g}g carbs, ${totals.fat_g}g fat, ${totals.fiber_g}g fiber\n\n`
+  + `Their daily targets: ${goals.calories} cal, ${goals.protein}g protein, ${goals.carbs}g carbs, ${goals.fat}g fat\n\n`
   + "Return this exact shape:\n"
-  + '{"day_score":1-10,"day_notes":"2-3 sentences of specific, actionable feedback on the WHOLE DAY as a pattern — protein distribution across meals, macro balance, what worked well, and 1-2 concrete things to adjust tomorrow. Name actual foods where relevant, not generic advice."}'
+  + '{"day_score":1-10,"day_notes":"2-3 sentences comparing actual intake against their specific targets — call out which targets were hit, missed, or exceeded and by roughly how much, plus protein distribution across meals and 1-2 concrete things to adjust tomorrow. Name actual foods where relevant, not generic advice."}'
 );
 
-const analyzeDay = async (mealsSummary, totals) => {
+const analyzeDay = async (mealsSummary, totals, goals) => {
   const res = await fetch(NUTRITION_PROXY_URL, {
     method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:500,
-      messages:[{role:"user", content:DAY_ANALYSIS_PROMPT(mealsSummary, totals)}]})
+      messages:[{role:"user", content:DAY_ANALYSIS_PROMPT(mealsSummary, totals, goals)}]})
   });
   const data = await res.json();
   const raw = (data.content && data.content[0] && data.content[0].text) || "{}";
@@ -1772,7 +1773,7 @@ function FoodTab({client, toast_}){
     setDayAnalysis(null);
     try {
       const mealsSummary = dayLogs.map(m=>`- ${m.meal_name} (${m.meal_time||"unspecified time"}): ${m.calories} cal, ${m.protein_g}g protein, ${m.carbs_g}g carbs, ${m.fat_g}g fat`).join("\n");
-      const result = await analyzeDay(mealsSummary, totals);
+      const result = await analyzeDay(mealsSummary, totals, {calories:calGoal, protein:proGoal, carbs:carbGoal, fat:fatGoal});
       setDayAnalysis(result);
     } catch(e){
       toast_("Could not analyze the day");
