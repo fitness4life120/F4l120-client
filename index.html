@@ -987,6 +987,24 @@ const GRADE_ONLY_PROMPT = (name, cal, pro, carb, fat, fiber) => (
   + '{"quality_score":1-10,"quality_notes":"1-2 SPECIFIC foods this person could add or pair with this to meaningfully raise the score — name actual foods, not generic advice. If it already scores 9-10, say so instead."}'
 );
 
+const DAY_ANALYSIS_PROMPT = (mealsSummary, totals) => (
+  "You are a precise sports nutrition expert. Analyze this person's FULL DAY of eating as a whole — not meal by meal — for a fitness/body recomp goal. Return ONLY a JSON object with no markdown, no preamble:\n\n"
+  + `Meals logged today:\n${mealsSummary}\n\nDaily totals: ${totals.calories} cal, ${totals.protein_g}g protein, ${totals.carbs_g}g carbs, ${totals.fat_g}g fat, ${totals.fiber_g}g fiber\n\n`
+  + "Return this exact shape:\n"
+  + '{"day_score":1-10,"day_notes":"2-3 sentences of specific, actionable feedback on the WHOLE DAY as a pattern — protein distribution across meals, macro balance, what worked well, and 1-2 concrete things to adjust tomorrow. Name actual foods where relevant, not generic advice."}'
+);
+
+const analyzeDay = async (mealsSummary, totals) => {
+  const res = await fetch(NUTRITION_PROXY_URL, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:500,
+      messages:[{role:"user", content:DAY_ANALYSIS_PROMPT(mealsSummary, totals)}]})
+  });
+  const data = await res.json();
+  const raw = (data.content && data.content[0] && data.content[0].text) || "{}";
+  return JSON.parse(raw.replace(/```json|```/g,"").trim());
+};
+
 const analyzeMealText = async (description) => {
   const res = await fetch(NUTRITION_PROXY_URL, {
     method:"POST", headers:{"Content-Type":"application/json"},
@@ -1440,6 +1458,8 @@ function FoodTab({client, toast_}){
   const [addingToMealId,setAddingToMealId] = useState(null);
   const [forgottenText,setForgottenText] = useState("");
   const [addingBusy,setAddingBusy] = useState(false);
+  const [dayAnalysis,setDayAnalysis] = useState(null);
+  const [analyzingDay,setAnalyzingDay] = useState(false);
   const [scanStatus,setScanStatus] = useState("");
   const codeReaderRef = useRef(null);
   const [librarySearch,setLibrarySearch] = useState("");
@@ -1566,6 +1586,8 @@ function FoodTab({client, toast_}){
     const d = new Date(nDate); d.setDate(d.getDate()+n);
     setNDate(d.toISOString().slice(0,10));
   };
+
+  useEffect(()=>{ setDayAnalysis(null); },[nDate]);
 
   const onPhotoSelected = async (file) => {
     if(!file) return;
@@ -1744,6 +1766,21 @@ function FoodTab({client, toast_}){
   const fatGoal = client.fat || 60;
   const calPct = Math.min((totals.calories/calGoal)*100,100);
 
+  const runDayAnalysis = async () => {
+    if(!dayLogs.length){ toast_("Log at least one meal for this day first"); return; }
+    setAnalyzingDay(true);
+    setDayAnalysis(null);
+    try {
+      const mealsSummary = dayLogs.map(m=>`- ${m.meal_name} (${m.meal_time||"unspecified time"}): ${m.calories} cal, ${m.protein_g}g protein, ${m.carbs_g}g carbs, ${m.fat_g}g fat`).join("\n");
+      const result = await analyzeDay(mealsSummary, totals);
+      setDayAnalysis(result);
+    } catch(e){
+      toast_("Could not analyze the day");
+    }
+    setAnalyzingDay(false);
+  };
+
+
   // Weekly averages (Mon-Sun week containing nDate)
   const weekDates = getWeekDates(nDate);
   const weekLogsAll = nLogs.filter(l=>weekDates.includes(l.date));
@@ -1837,6 +1874,19 @@ function FoodTab({client, toast_}){
           <MacroBox label="Fat" value={totals.fat_g} goal={fatGoal} color="#ef9a9a"/>
           <MacroBox label="Fiber" value={totals.fiber_g} goal={null} color="#a5d6a7"/>
         </div>
+      </div>
+
+      <div className="card">
+        <button className="bp" disabled={analyzingDay} onClick={runDayAnalysis}>{analyzingDay?"Analyzing your day…":"📊 Analyze My Day"}</button>
+        {dayAnalysis&&(
+          <div style={{marginTop:12,background:"var(--bg)",borderRadius:8,padding:14,border:"1px solid var(--teal)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontSize:12,color:"var(--muted)",fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>Day Score</div>
+              <span style={{fontSize:13,fontWeight:700,color:dayAnalysis.day_score>=8?"var(--green)":dayAnalysis.day_score>=6?"var(--gold)":"var(--red)",background:"var(--soft)",padding:"2px 10px",borderRadius:10}}>{dayAnalysis.day_score}/10</span>
+            </div>
+            <div style={{fontSize:13,color:"var(--txt)",lineHeight:1.5}}>{dayAnalysis.day_notes}</div>
+          </div>
+        )}
       </div>
 
       <div className="card">
