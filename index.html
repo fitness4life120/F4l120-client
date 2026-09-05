@@ -1022,12 +1022,21 @@ const callNutritionProxy = async (body) => {
   catch(e) { throw new Error(`Nutrition AI service returned an invalid response (status ${res.status}).`); }
 
   if(!res.ok){
-    const serverMsg = (data && (data.error || data.message)) ? `: ${data.error || data.message}` : "";
+    const serverMsg = (data && (data.error || data.message)) ? `: ${JSON.stringify(data.error || data.message)}` : "";
     throw new Error(`Nutrition AI service error (status ${res.status})${serverMsg}`);
+  }
+  // Anthropic (or a passthrough proxy) can return an error object with a 200 status.
+  // Surface that explicitly instead of falling through to a generic "no content" message.
+  if(data && data.error){
+    const msg = typeof data.error==="string" ? data.error : (data.error.message || JSON.stringify(data.error));
+    throw new Error(`Nutrition AI service error: ${msg}`);
+  }
+  if(data && data.type==="error"){
+    throw new Error(`Nutrition AI service error: ${data.message || JSON.stringify(data)}`);
   }
   const textBlock = data && Array.isArray(data.content) && data.content.find(b=>b && b.type==="text");
   if(!textBlock || !textBlock.text){
-    throw new Error("Nutrition AI service returned no analysis content.");
+    throw new Error(`Nutrition AI service returned no analysis content. Raw response: ${JSON.stringify(data).slice(0,300)}`);
   }
   const raw = textBlock.text.replace(/```json|```/g,"").trim();
   let parsed;
