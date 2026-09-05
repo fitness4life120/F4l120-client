@@ -1678,7 +1678,7 @@ function FoodTab({client, toast_}){
         meal_name: meal.meal_label, meal_description: meal.description || meal.meal_label,
         calories: meal.calories, protein_g: meal.protein_g, carbs_g: meal.carbs_g,
         fat_g: meal.fat_g, fiber_g: meal.fiber_g, serving_note: meal.serving_note,
-        quality_score: null, quality_notes: null
+        quality_score: meal.quality_score, quality_notes: meal.quality_notes
       })});
       if(saved && saved[0]) setNLogs(p=>[...p, saved[0]]);
       toast_("Logged: "+meal.meal_label+" ✓");
@@ -1946,10 +1946,14 @@ function FoodTab({client, toast_}){
             <div key={meal.id} style={{background:"var(--s1)",border:"1px solid var(--b1)",borderLeft:"3px solid var(--teal)",borderRadius:7,padding:"9px 12px",marginBottom:6}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:13,fontWeight:600}}>{meal.meal_label}</span>
-                {meal.suggested_time&&<span style={{fontSize:9,color:"var(--teal2)",background:"var(--teal3)",borderRadius:3,padding:"1px 6px"}}>{meal.suggested_time}</span>}
+                <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                  {meal.quality_score!=null&&<span style={{fontSize:11,fontWeight:700,color:meal.quality_score>=8?"var(--green)":meal.quality_score>=6?"var(--gold)":"var(--red)",background:"var(--soft)",padding:"2px 8px",borderRadius:10}}>{meal.quality_score}/10</span>}
+                  {meal.suggested_time&&<span style={{fontSize:9,color:"var(--teal2)",background:"var(--teal3)",borderRadius:3,padding:"1px 6px"}}>{meal.suggested_time}</span>}
+                </div>
               </div>
               {meal.description&&<div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{meal.description}</div>}
               <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{meal.calories} cal · {meal.protein_g}p / {meal.carbs_g}c / {meal.fat_g}f{meal.fiber_g?` / ${meal.fiber_g}fb`:""}{meal.serving_note?" · "+meal.serving_note:""}</div>
+              {meal.quality_notes&&<div style={{fontSize:11,color:"var(--txt)",fontStyle:"italic",marginTop:3}}>{meal.quality_notes}</div>}
               <button onClick={()=>logNutritionPlanMeal(meal)} disabled={loggingPlanMealId===meal.id} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:6,opacity:loggingPlanMealId===meal.id?0.6:1}}>{loggingPlanMealId===meal.id?"Logging…":"Log It"}</button>
             </div>
           ))}
