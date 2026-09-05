@@ -1464,6 +1464,9 @@ function FoodTab({client, toast_}){
   const [waterLogs,setWaterLogs] = useState([]);
   const [foodLibrary,setFoodLibrary] = useState([]);
   const [mealPlans,setMealPlans] = useState([]);
+  const [activeNutritionPlan,setActiveNutritionPlan] = useState(null);
+  const [nutritionPlanMeals,setNutritionPlanMeals] = useState([]);
+  const [loggingPlanMealId,setLoggingPlanMealId] = useState(null);
   const [scanning,setScanning] = useState(false);
   const [expandedMealId,setExpandedMealId] = useState(null);
   const [addingToMealId,setAddingToMealId] = useState(null);
@@ -1547,6 +1550,13 @@ function FoodTab({client, toast_}){
     api(`water_logs?client_id=eq.${client.id}`).then(setWaterLogs).catch(()=>{});
     api(`food_library?or=(client_id.is.null,client_id.eq.${client.id})&order=name.asc`).then(setFoodLibrary).catch(()=>{});
     api(`meal_plans?client_id=eq.${client.id}&order=date.asc`).then(setMealPlans).catch(()=>{});
+    api(`nutrition_plans?client_id=eq.${client.id}&active=eq.true&order=created_at.desc&limit=1`).then(async rows=>{
+      if(rows && rows[0]){
+        setActiveNutritionPlan(rows[0]);
+        const meals = await api(`nutrition_plan_meals?plan_id=eq.${rows[0].id}&order=sort_order.asc`).catch(()=>[]);
+        setNutritionPlanMeals(meals||[]);
+      }
+    }).catch(()=>{});
   },[client.id]);
 
   const waterToday = waterLogs.find(w=>w.date===nDate);
@@ -1634,6 +1644,22 @@ function FoodTab({client, toast_}){
       if(saved && saved[0]) setNLogs(p=>[...p, saved[0]]);
       toast_("Logged: "+meal.name+" ✓");
     } catch(e){ toast_("Could not log meal"); }
+  };
+
+  const logNutritionPlanMeal = async (meal) => {
+    setLoggingPlanMealId(meal.id);
+    try {
+      const saved = await api("nutrition_logs",{method:"POST",body:JSON.stringify({
+        client_id: client.id, date: nDate, meal_time: meal.suggested_time || "Snack",
+        meal_name: meal.meal_label, meal_description: meal.description || meal.meal_label,
+        calories: meal.calories, protein_g: meal.protein_g, carbs_g: meal.carbs_g,
+        fat_g: meal.fat_g, fiber_g: meal.fiber_g, serving_note: meal.serving_note,
+        quality_score: null, quality_notes: null
+      })});
+      if(saved && saved[0]) setNLogs(p=>[...p, saved[0]]);
+      toast_("Logged: "+meal.meal_label+" ✓");
+    } catch(e){ toast_("Could not log meal"); }
+    setLoggingPlanMealId(null);
   };
 
   const confirmLog = async () => {
@@ -1887,6 +1913,24 @@ function FoodTab({client, toast_}){
         </div>
         <button className="bg_" style={{width:"auto",margin:0,padding:"9px 16px"}} onClick={()=>shiftDay(1)}>Next</button>
       </div>
+
+      {nutritionPlanMeals&&nutritionPlanMeals.length>0&&(
+        <div className="card">
+          <div className="clbl">🍽️ Your Meal Options</div>
+          <div style={{fontSize:11,color:"var(--muted)",marginBottom:8}}>Pick any of these whenever you eat — log as many or as few as you like.</div>
+          {nutritionPlanMeals.map(meal=>(
+            <div key={meal.id} style={{background:"var(--s1)",border:"1px solid var(--b1)",borderLeft:"3px solid var(--teal)",borderRadius:7,padding:"9px 12px",marginBottom:6}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:13,fontWeight:600}}>{meal.meal_label}</span>
+                {meal.suggested_time&&<span style={{fontSize:9,color:"var(--teal2)",background:"var(--teal3)",borderRadius:3,padding:"1px 6px"}}>{meal.suggested_time}</span>}
+              </div>
+              {meal.description&&<div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{meal.description}</div>}
+              <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{meal.calories} cal · {meal.protein_g}p / {meal.carbs_g}c / {meal.fat_g}f{meal.fiber_g?` / ${meal.fiber_g}fb`:""}{meal.serving_note?" · "+meal.serving_note:""}</div>
+              <button onClick={()=>logNutritionPlanMeal(meal)} disabled={loggingPlanMealId===meal.id} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:6,opacity:loggingPlanMealId===meal.id?0.6:1}}>{loggingPlanMealId===meal.id?"Logging…":"Log It"}</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {mealPlanForDay&&mealPlanForDay.meals&&mealPlanForDay.meals.length>0&&(
         <div className="card">
