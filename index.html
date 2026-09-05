@@ -1004,37 +1004,56 @@ const DAY_ANALYSIS_PROMPT = (mealsSummary, totals, goals) => (
   + '{"day_score":1-10,"day_notes":"2-3 sentences comparing actual intake against their specific targets — call out which targets were hit, missed, or exceeded and by roughly how much, plus protein distribution across meals and 1-2 concrete things to adjust tomorrow. Name actual foods where relevant, not generic advice."}'
 );
 
+// Shared helper: calls the AI proxy and STRICTLY validates the response.
+// Throws a descriptive error instead of silently returning {} so failures
+// are visible to the user (toast) instead of showing blank calories/macros.
+const callNutritionProxy = async (body) => {
+  let res;
+  try {
+    res = await fetch(NUTRITION_PROXY_URL, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+  } catch(e) {
+    throw new Error("Could not reach the nutrition AI service (network error).");
+  }
+  let data;
+  try { data = await res.json(); }
+  catch(e) { throw new Error(`Nutrition AI service returned an invalid response (status ${res.status}).`); }
+
+  if(!res.ok){
+    const serverMsg = (data && (data.error || data.message)) ? `: ${data.error || data.message}` : "";
+    throw new Error(`Nutrition AI service error (status ${res.status})${serverMsg}`);
+  }
+  const textBlock = data && Array.isArray(data.content) && data.content.find(b=>b && b.type==="text");
+  if(!textBlock || !textBlock.text){
+    throw new Error("Nutrition AI service returned no analysis content.");
+  }
+  const raw = textBlock.text.replace(/```json|```/g,"").trim();
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch(e) { throw new Error("Nutrition AI service returned unparseable analysis."); }
+  if(!parsed || typeof parsed!=="object" || Object.keys(parsed).length===0){
+    throw new Error("Nutrition AI service returned empty analysis.");
+  }
+  return parsed;
+};
+
 const analyzeDay = async (mealsSummary, totals, goals) => {
-  const res = await fetch(NUTRITION_PROXY_URL, {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:500,
-      messages:[{role:"user", content:DAY_ANALYSIS_PROMPT(mealsSummary, totals, goals)}]})
-  });
-  const data = await res.json();
-  const raw = (data.content && data.content[0] && data.content[0].text) || "{}";
-  return JSON.parse(raw.replace(/```json|```/g,"").trim());
+  return callNutritionProxy({model:"claude-sonnet-4-6", max_tokens:500,
+    messages:[{role:"user", content:DAY_ANALYSIS_PROMPT(mealsSummary, totals, goals)}]});
 };
 
 const analyzeMealText = async (description) => {
-  const res = await fetch(NUTRITION_PROXY_URL, {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:1000,
-      messages:[{role:"user", content:NUTRITION_PROMPT_TEMPLATE(`Meal: "${description}"`)}]})
-  });
-  const data = await res.json();
-  const raw = (data.content && data.content[0] && data.content[0].text) || "{}";
-  return JSON.parse(raw.replace(/```json|```/g,"").trim());
+  const result = await callNutritionProxy({model:"claude-sonnet-4-6", max_tokens:1000,
+    messages:[{role:"user", content:NUTRITION_PROMPT_TEMPLATE(`Meal: "${description}"`)}]});
+  if(!result.meal_name || result.calories==null) throw new Error("Analysis is missing meal name or calories.");
+  return result;
 };
 
 const gradeKnownMeal = async (name, cal, pro, carb, fat, fiber) => {
-  const res = await fetch(NUTRITION_PROXY_URL, {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:400,
-      messages:[{role:"user", content:GRADE_ONLY_PROMPT(name, cal, pro, carb, fat, fiber)}]})
-  });
-  const data = await res.json();
-  const raw = (data.content && data.content[0] && data.content[0].text) || "{}";
-  return JSON.parse(raw.replace(/```json|```/g,"").trim());
+  return callNutritionProxy({model:"claude-sonnet-4-6", max_tokens:400,
+    messages:[{role:"user", content:GRADE_ONLY_PROMPT(name, cal, pro, carb, fat, fiber)}]});
 };
 
 const analyzeMealPhoto = async (base64, mediaType, captionText) => {
@@ -1042,17 +1061,13 @@ const analyzeMealPhoto = async (base64, mediaType, captionText) => {
 - If it is a Nutrition Facts label or ingredients panel: read the exact printed values per serving (calories, protein, carbs, fat, fiber). If the note above specifies a quantity or number of servings eaten, scale the printed values accordingly; otherwise use the printed single-serving values exactly as shown — do not estimate or round differently than what's printed.
 - If it is a plate or photo of food (not a label): estimate the nutrition facts using the plate, portion sizes, and visible ingredients to judge quantities as accurately as possible.
 Use whichever approach actually fits what's in the photo.`;
-  const res = await fetch(NUTRITION_PROXY_URL, {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:1000,
-      messages:[{role:"user", content:[
-        {type:"image", source:{type:"base64", media_type:mediaType, data:base64}},
-        {type:"text", text:NUTRITION_PROMPT_TEMPLATE(instructions)}
-      ]}]})
-  });
-  const data = await res.json();
-  const raw = (data.content && data.content[0] && data.content[0].text) || "{}";
-  return JSON.parse(raw.replace(/```json|```/g,"").trim());
+  const result = await callNutritionProxy({model:"claude-sonnet-4-6", max_tokens:1000,
+    messages:[{role:"user", content:[
+      {type:"image", source:{type:"base64", media_type:mediaType, data:base64}},
+      {type:"text", text:NUTRITION_PROMPT_TEMPLATE(instructions)}
+    ]}]});
+  if(!result.meal_name || result.calories==null) throw new Error("Analysis is missing meal name or calories.");
+  return result;
 };
 
 const fileToBase64 = (file) => new Promise((resolve,reject) => {
@@ -1628,7 +1643,7 @@ function FoodTab({client, toast_}){
         ? await analyzeMealPhoto(photoBase64, photoMediaType, mealText.trim())
         : await analyzeMealText(mealText.trim());
       setResult(r);
-    } catch(e){ toast_("AI analysis failed"); }
+    } catch(e){ toast_("AI analysis failed: "+(e.message||"unknown error")); }
     setAnalyzing(false);
   };
 
@@ -1828,7 +1843,7 @@ function FoodTab({client, toast_}){
       const result = await analyzeDay(mealsSummary, totals, {calories:calGoal, protein:proGoal, carbs:carbGoal, fat:fatGoal});
       setDayAnalysis(result);
     } catch(e){
-      toast_("Could not analyze the day");
+      toast_("Could not analyze the day: "+(e.message||"unknown error"));
     }
     setAnalyzingDay(false);
   };
