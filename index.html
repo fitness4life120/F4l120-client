@@ -1463,6 +1463,7 @@ function FoodTab({client, toast_}){
   const [result,setResult] = useState(null);
   const [waterLogs,setWaterLogs] = useState([]);
   const [foodLibrary,setFoodLibrary] = useState([]);
+  const [mealPlans,setMealPlans] = useState([]);
   const [scanning,setScanning] = useState(false);
   const [expandedMealId,setExpandedMealId] = useState(null);
   const [addingToMealId,setAddingToMealId] = useState(null);
@@ -1545,6 +1546,7 @@ function FoodTab({client, toast_}){
     api(`nutrition_logs?client_id=eq.${client.id}&order=created_at.asc`).then(setNLogs).catch(()=>toast_("Could not load meals"));
     api(`water_logs?client_id=eq.${client.id}`).then(setWaterLogs).catch(()=>{});
     api(`food_library?or=(client_id.is.null,client_id.eq.${client.id})&order=name.asc`).then(setFoodLibrary).catch(()=>{});
+    api(`meal_plans?client_id=eq.${client.id}&order=date.asc`).then(setMealPlans).catch(()=>{});
   },[client.id]);
 
   const waterToday = waterLogs.find(w=>w.date===nDate);
@@ -1618,6 +1620,20 @@ function FoodTab({client, toast_}){
       setResult(r);
     } catch(e){ toast_("AI analysis failed"); }
     setAnalyzing(false);
+  };
+
+  const logPlannedMeal = async (meal) => {
+    try {
+      const saved = await api("nutrition_logs",{method:"POST",body:JSON.stringify({
+        client_id: client.id, date: nDate, meal_time: meal.meal_time,
+        meal_name: meal.name, meal_description: meal.name,
+        calories: meal.calories, protein_g: meal.protein_g, carbs_g: meal.carbs_g,
+        fat_g: meal.fat_g, fiber_g: meal.fiber_g, serving_note: meal.serving_note,
+        quality_score: null, quality_notes: null
+      })});
+      if(saved && saved[0]) setNLogs(p=>[...p, saved[0]]);
+      toast_("Logged: "+meal.name+" ✓");
+    } catch(e){ toast_("Could not log meal"); }
   };
 
   const confirmLog = async () => {
@@ -1765,6 +1781,7 @@ function FoodTab({client, toast_}){
   };
 
   const dayLogs = nLogs.filter(l=>l.date===nDate);
+  const mealPlanForDay = mealPlans.find(p=>p.date===nDate);
   const totals = dayLogs.reduce((acc,m)=>{
     acc.calories += (+m.calories||0); acc.protein_g += (+m.protein_g||0);
     acc.carbs_g += (+m.carbs_g||0); acc.fat_g += (+m.fat_g||0); acc.fiber_g += (+m.fiber_g||0);
@@ -1870,6 +1887,28 @@ function FoodTab({client, toast_}){
         </div>
         <button className="bg_" style={{width:"auto",margin:0,padding:"9px 16px"}} onClick={()=>shiftDay(1)}>Next</button>
       </div>
+
+      {mealPlanForDay&&mealPlanForDay.meals&&mealPlanForDay.meals.length>0&&(
+        <div className="card">
+          <div className="clbl">🍽️ Your Meal Plan for Today</div>
+          {mealPlanForDay.meals.map(meal=>{
+            const isLogged = dayLogs.some(l=>l.meal_name===meal.name);
+            return (
+              <div key={meal.id} style={{background:isLogged?"rgba(45,186,128,0.08)":"var(--s1)",border:"1px solid "+(isLogged?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(isLogged?"var(--green)":"var(--teal)"),borderRadius:7,padding:"9px 12px",marginBottom:6}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:13,fontWeight:600}}>{meal.name}</span>
+                  <span style={{fontSize:9,color:"var(--teal2)",background:"var(--teal3)",borderRadius:3,padding:"1px 6px"}}>{meal.meal_time}</span>
+                </div>
+                <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{meal.calories} cal · {meal.protein_g}p / {meal.carbs_g}c / {meal.fat_g}f{meal.serving_note?" · "+meal.serving_note:""}</div>
+                {isLogged
+                  ? <span style={{display:"inline-block",fontSize:11,color:"var(--green)",fontWeight:700,marginTop:6}}>✓ Logged</span>
+                  : <button onClick={()=>logPlannedMeal(meal)} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:6}}>Log It</button>
+                }
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="card">
         <div className="clbl">Today's Totals</div>
