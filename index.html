@@ -328,7 +328,7 @@ function nestBySupersetGroup(exerciseGroups){
   return result;
 }
 
-function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet}){
+function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet, onAddSet}){
   const vidUrl = exerciseVideos&&exerciseVideos[group.exercise];
   const pr = getExercisePR(logs, group.exercise);
   const isTime = group.sets[0] && group.sets[0].log_type==="time";
@@ -336,6 +336,9 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet}){
   const vol = isTime ? 0 : group.sets.reduce((a,s)=>a+((+s.sets||1)*(+s.reps||0)*(+s.weight||0)),0);
   const [editingId, setEditingId] = React.useState(null);
   const [editVals, setEditVals] = React.useState({});
+  const [addingSet, setAddingSet] = React.useState(false);
+  const [addVals, setAddVals] = React.useState({reps:"", weight:"", distance:"", distance_unit:"mi"});
+  const [savingNewSet, setSavingNewSet] = React.useState(false);
   const startEdit = (s) => { setEditingId(s.id); setEditVals({reps:s.reps||"", weight:s.weight||"", distance:s.distance||"", distance_unit:s.distance_unit||"mi"}); };
   const saveEdit = (id) => {
     const patch = isDistance ? {distance: editVals.distance?+editVals.distance:null, distance_unit: editVals.distance_unit}
@@ -343,6 +346,13 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet}){
       : {reps: editVals.reps?+editVals.reps:null, weight: editVals.weight?+editVals.weight:null};
     onEditSet(id, patch);
     setEditingId(null);
+  };
+  const saveNewSet = async () => {
+    setSavingNewSet(true);
+    await onAddSet(group, addVals);
+    setSavingNewSet(false);
+    setAddingSet(false);
+    setAddVals({reps:"", weight:"", distance:"", distance_unit:"mi"});
   };
   return (
     <div className="ex-row">
@@ -383,6 +393,30 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet}){
             </div>
           )
         ))}
+        {addingSet ? (
+          <div style={{display:"flex",gap:6,alignItems:"center",fontSize:12,padding:"4px 0"}}>
+            <span style={{color:"var(--muted)",minWidth:38}}>Set {group.sets.length+1}:</span>
+            {isDistance ? (
+              <>
+                <input type="number" value={addVals.distance} onChange={e=>setAddVals(v=>({...v,distance:e.target.value}))} placeholder="dist" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+                <select value={addVals.distance_unit} onChange={e=>setAddVals(v=>({...v,distance_unit:e.target.value}))} style={{background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 4px",color:"var(--txt)",fontSize:12}}>
+                  <option value="mi">mi</option><option value="km">km</option>
+                </select>
+              </>
+            ) : isTime ? (
+              <input type="number" value={addVals.reps} onChange={e=>setAddVals(v=>({...v,reps:e.target.value}))} placeholder="sec" style={{width:60,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+            ) : (
+              <>
+                <input type="number" value={addVals.reps} onChange={e=>setAddVals(v=>({...v,reps:e.target.value}))} placeholder="reps" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+                <input type="number" value={addVals.weight} onChange={e=>setAddVals(v=>({...v,weight:e.target.value}))} placeholder="lbs" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+              </>
+            )}
+            <span onClick={savingNewSet?undefined:saveNewSet} style={{cursor:savingNewSet?"default":"pointer",color:"var(--teal2)",fontWeight:700,fontSize:11,opacity:savingNewSet?0.6:1}}>{savingNewSet?"Adding…":"Add"}</span>
+            <span onClick={()=>setAddingSet(false)} style={{cursor:"pointer",color:"var(--muted)",fontSize:11}}>Cancel</span>
+          </div>
+        ) : (
+          <div onClick={()=>setAddingSet(true)} style={{cursor:"pointer",color:"var(--teal2)",fontSize:11,fontWeight:700,marginTop:2}}>+ Add Set</div>
+        )}
       </div>
       <div className="ex-bot">
         {group.muscle&&<span className="mtag">{group.muscle}</span>}
@@ -2861,6 +2895,26 @@ function App(){
     } catch(e){ toast_("Could not update set: "+e.message); }
   };
 
+  const addSetToGroup = async (group, vals) => {
+    const base = group.sets[0];
+    const isTime = base.log_type==="time";
+    const isDistance = base.log_type==="distance";
+    const payload = {
+      client_id: client.id, exercise: group.exercise, muscle: group.muscle||null, notes: group.notes||null,
+      date: base.date, from_plan: !!base.from_plan, exercise_group: base.exercise_group||null,
+      log_type: base.log_type||"reps", each_side: !!base.each_side, sets: "1",
+      reps: isDistance ? null : (vals.reps?+vals.reps:null),
+      weight: (isTime||isDistance) ? null : (vals.weight?+vals.weight:null),
+      distance: isDistance ? (vals.distance?+vals.distance:null) : null,
+      distance_unit: isDistance ? vals.distance_unit : null
+    };
+    try {
+      const [saved] = await api("workout_logs",{method:"POST",body:JSON.stringify(payload)});
+      if(saved) setLogs(p=>[...p, saved]);
+      toast_("Set added ✓");
+    } catch(e){ toast_("Could not add set: "+e.message); }
+  };
+
   const addProg = async () => {
     if(!client) return;
     if(!pf.weight){ toast_("Weight is required to save a check-in"); return; }
@@ -3111,10 +3165,10 @@ function App(){
             <>
               <div className="dh"><span className="dl">Today</span><div className="dline"/><span className="dc">{todayLogs.length}</span></div>
               {nestBySupersetGroup(groupByExercise(todayLogs)).map((item,gi)=>item.type==="single"
-                ? <ExGroupCard key={item.group.sets[0].id} group={item.group} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx}/>
+                ? <ExGroupCard key={item.group.sets[0].id} group={item.group} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx} onAddSet={addSetToGroup}/>
                 : <div key={gi} style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
                     <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
-                    {item.groups.map(g=><ExGroupCard key={g.sets[0].id} group={g} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx}/>)}
+                    {item.groups.map(g=><ExGroupCard key={g.sets[0].id} group={g} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx} onAddSet={addSetToGroup}/>)}
                   </div>
               )}
             </>
@@ -3152,10 +3206,10 @@ function App(){
               <div key={d}>
                 <div className="dh"><span className="dl">{fmt(d)}</span><div className="dline"/><span className="dc">{grp[d].length}</span></div>
                 {nestBySupersetGroup(groupByExercise(grp[d])).map((item,gi)=>item.type==="single"
-                  ? <ExGroupCard key={item.group.sets[0].id} group={item.group} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx}/>
+                  ? <ExGroupCard key={item.group.sets[0].id} group={item.group} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx} onAddSet={addSetToGroup}/>
                   : <div key={gi} style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
                       <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
-                      {item.groups.map(g=><ExGroupCard key={g.sets[0].id} group={g} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx}/>)}
+                      {item.groups.map(g=><ExGroupCard key={g.sets[0].id} group={g} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx} onAddSet={addSetToGroup}/>)}
                     </div>
                 )}
               </div>
