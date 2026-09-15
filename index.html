@@ -328,11 +328,22 @@ function nestBySupersetGroup(exerciseGroups){
   return result;
 }
 
-function ExGroupCard({group, exerciseVideos, logs, onDelSet}){
+function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet}){
   const vidUrl = exerciseVideos&&exerciseVideos[group.exercise];
   const pr = getExercisePR(logs, group.exercise);
   const isTime = group.sets[0] && group.sets[0].log_type==="time";
+  const isDistance = group.sets[0] && group.sets[0].log_type==="distance";
   const vol = isTime ? 0 : group.sets.reduce((a,s)=>a+((+s.sets||1)*(+s.reps||0)*(+s.weight||0)),0);
+  const [editingId, setEditingId] = React.useState(null);
+  const [editVals, setEditVals] = React.useState({});
+  const startEdit = (s) => { setEditingId(s.id); setEditVals({reps:s.reps||"", weight:s.weight||"", distance:s.distance||"", distance_unit:s.distance_unit||"mi"}); };
+  const saveEdit = (id) => {
+    const patch = isDistance ? {distance: editVals.distance?+editVals.distance:null, distance_unit: editVals.distance_unit}
+      : isTime ? {reps: editVals.reps?+editVals.reps:null}
+      : {reps: editVals.reps?+editVals.reps:null, weight: editVals.weight?+editVals.weight:null};
+    onEditSet(id, patch);
+    setEditingId(null);
+  };
   return (
     <div className="ex-row">
       <div className="ex-top">
@@ -341,10 +352,36 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet}){
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:3,margin:"6px 0"}}>
         {group.sets.map((s,i)=>(
-          <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,color:"var(--muted)"}}>
-            <span>Set {i+1}: {s.log_type==="time" ? `${s.reps||"?"} sec` : s.log_type==="distance" ? `${s.distance||"?"} ${s.distance_unit||"mi"}` : `${s.reps||"?"} reps`}{s.each_side?" each":""}{s.weight?` @ ${s.weight} lbs`:""}</span>
-            <span onClick={()=>onDelSet(s.id)} style={{cursor:"pointer",textDecoration:"underline",fontSize:11}}>remove</span>
-          </div>
+          editingId===s.id ? (
+            <div key={s.id} style={{display:"flex",gap:6,alignItems:"center",fontSize:12,padding:"4px 0"}}>
+              <span style={{color:"var(--muted)",minWidth:38}}>Set {i+1}:</span>
+              {isDistance ? (
+                <>
+                  <input type="number" value={editVals.distance} onChange={e=>setEditVals(v=>({...v,distance:e.target.value}))} placeholder="dist" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+                  <select value={editVals.distance_unit} onChange={e=>setEditVals(v=>({...v,distance_unit:e.target.value}))} style={{background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 4px",color:"var(--txt)",fontSize:12}}>
+                    <option value="mi">mi</option><option value="km">km</option>
+                  </select>
+                </>
+              ) : isTime ? (
+                <input type="number" value={editVals.reps} onChange={e=>setEditVals(v=>({...v,reps:e.target.value}))} placeholder="sec" style={{width:60,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+              ) : (
+                <>
+                  <input type="number" value={editVals.reps} onChange={e=>setEditVals(v=>({...v,reps:e.target.value}))} placeholder="reps" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+                  <input type="number" value={editVals.weight} onChange={e=>setEditVals(v=>({...v,weight:e.target.value}))} placeholder="lbs" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+                </>
+              )}
+              <span onClick={()=>saveEdit(s.id)} style={{cursor:"pointer",color:"var(--teal2)",fontWeight:700,fontSize:11}}>Save</span>
+              <span onClick={()=>setEditingId(null)} style={{cursor:"pointer",color:"var(--muted)",fontSize:11}}>Cancel</span>
+            </div>
+          ) : (
+            <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,color:"var(--muted)"}}>
+              <span>Set {i+1}: {s.log_type==="time" ? `${s.reps||"?"} sec` : s.log_type==="distance" ? `${s.distance||"?"} ${s.distance_unit||"mi"}` : `${s.reps||"?"} reps`}{s.each_side?" each":""}{s.weight?` @ ${s.weight} lbs`:""}</span>
+              <span>
+                <span onClick={()=>startEdit(s)} style={{cursor:"pointer",textDecoration:"underline",fontSize:11,marginRight:10}}>edit</span>
+                <span onClick={()=>onDelSet(s.id)} style={{cursor:"pointer",textDecoration:"underline",fontSize:11}}>remove</span>
+              </span>
+            </div>
+          )
         ))}
       </div>
       <div className="ex-bot">
@@ -2816,6 +2853,14 @@ function App(){
     } catch{}
   };
 
+  const editEx = async (id, patch) => {
+    try {
+      const [updated] = await api(`workout_logs?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(patch)});
+      if(updated) setLogs(p=>p.map(e=>e.id===id?updated:e));
+      toast_("Set updated ✓");
+    } catch(e){ toast_("Could not update set: "+e.message); }
+  };
+
   const addProg = async () => {
     if(!client) return;
     if(!pf.weight){ toast_("Weight is required to save a check-in"); return; }
@@ -3066,10 +3111,10 @@ function App(){
             <>
               <div className="dh"><span className="dl">Today</span><div className="dline"/><span className="dc">{todayLogs.length}</span></div>
               {nestBySupersetGroup(groupByExercise(todayLogs)).map((item,gi)=>item.type==="single"
-                ? <ExGroupCard key={item.group.sets[0].id} group={item.group} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx}/>
+                ? <ExGroupCard key={item.group.sets[0].id} group={item.group} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx}/>
                 : <div key={gi} style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
                     <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
-                    {item.groups.map(g=><ExGroupCard key={g.sets[0].id} group={g} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx}/>)}
+                    {item.groups.map(g=><ExGroupCard key={g.sets[0].id} group={g} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx}/>)}
                   </div>
               )}
             </>
@@ -3107,10 +3152,10 @@ function App(){
               <div key={d}>
                 <div className="dh"><span className="dl">{fmt(d)}</span><div className="dline"/><span className="dc">{grp[d].length}</span></div>
                 {nestBySupersetGroup(groupByExercise(grp[d])).map((item,gi)=>item.type==="single"
-                  ? <ExGroupCard key={item.group.sets[0].id} group={item.group} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx}/>
+                  ? <ExGroupCard key={item.group.sets[0].id} group={item.group} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx}/>
                   : <div key={gi} style={{background:"var(--teal3)",border:"1px solid var(--teal)",borderRadius:8,padding:8,marginBottom:8}}>
                       <div style={{fontSize:11,fontWeight:800,color:"var(--teal2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🔄 {item.label}</div>
-                      {item.groups.map(g=><ExGroupCard key={g.sets[0].id} group={g} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx}/>)}
+                      {item.groups.map(g=><ExGroupCard key={g.sets[0].id} group={g} exerciseVideos={exerciseVideos} logs={logs} onDelSet={delEx} onEditSet={editEx}/>)}
                     </div>
                 )}
               </div>
