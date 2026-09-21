@@ -333,17 +333,18 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet, onAddSet
   const pr = getExercisePR(logs, group.exercise);
   const isTime = group.sets[0] && group.sets[0].log_type==="time";
   const isDistance = group.sets[0] && group.sets[0].log_type==="distance";
+  const hasHeight = group.sets.some(s=>s.height);
   const vol = isTime ? 0 : group.sets.reduce((a,s)=>a+((+s.sets||1)*(+s.reps||0)*(+s.weight||0)),0);
   const [editingId, setEditingId] = React.useState(null);
   const [editVals, setEditVals] = React.useState({});
   const [addingSet, setAddingSet] = React.useState(false);
-  const [addVals, setAddVals] = React.useState({reps:"", weight:"", distance:"", distance_unit:"mi"});
+  const [addVals, setAddVals] = React.useState({reps:"", weight:"", distance:"", distance_unit:"mi", height:""});
   const [savingNewSet, setSavingNewSet] = React.useState(false);
-  const startEdit = (s) => { setEditingId(s.id); setEditVals({reps:s.reps||"", weight:s.weight||"", distance:s.distance||"", distance_unit:s.distance_unit||"mi"}); };
+  const startEdit = (s) => { setEditingId(s.id); setEditVals({reps:s.reps||"", weight:s.weight||"", distance:s.distance||"", distance_unit:s.distance_unit||"mi", height:s.height||""}); };
   const saveEdit = (id) => {
     const patch = isDistance ? {distance: editVals.distance?+editVals.distance:null, distance_unit: editVals.distance_unit}
       : isTime ? {reps: editVals.reps?+editVals.reps:null}
-      : {reps: editVals.reps?+editVals.reps:null, weight: editVals.weight?+editVals.weight:null};
+      : {reps: editVals.reps?+editVals.reps:null, weight: editVals.weight?+editVals.weight:null, height: editVals.height?+editVals.height:null};
     onEditSet(id, patch);
     setEditingId(null);
   };
@@ -352,7 +353,7 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet, onAddSet
     await onAddSet(group, addVals);
     setSavingNewSet(false);
     setAddingSet(false);
-    setAddVals({reps:"", weight:"", distance:"", distance_unit:"mi"});
+    setAddVals({reps:"", weight:"", distance:"", distance_unit:"mi", height:""});
   };
   return (
     <div className="ex-row">
@@ -378,6 +379,7 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet, onAddSet
                 <>
                   <input type="number" value={editVals.reps} onChange={e=>setEditVals(v=>({...v,reps:e.target.value}))} placeholder="reps" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
                   <input type="number" value={editVals.weight} onChange={e=>setEditVals(v=>({...v,weight:e.target.value}))} placeholder="lbs" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+                  <input type="number" value={editVals.height} onChange={e=>setEditVals(v=>({...v,height:e.target.value}))} placeholder="height" style={{width:60,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
                 </>
               )}
               <span onClick={()=>saveEdit(s.id)} style={{cursor:"pointer",color:"var(--teal2)",fontWeight:700,fontSize:11}}>Save</span>
@@ -385,7 +387,7 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet, onAddSet
             </div>
           ) : (
             <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,color:"var(--muted)"}}>
-              <span>Set {i+1}: {s.log_type==="time" ? `${s.reps||"?"} sec` : s.log_type==="distance" ? `${s.distance||"?"} ${s.distance_unit||"mi"}` : `${s.reps||"?"} reps`}{s.each_side?" each":""}{s.weight?` @ ${s.weight} lbs`:""}</span>
+              <span>Set {i+1}: {s.log_type==="time" ? `${s.reps||"?"} sec` : s.log_type==="distance" ? `${s.distance||"?"} ${s.distance_unit||"mi"}` : `${s.reps||"?"} reps`}{s.each_side?" each":""}{s.weight?` @ ${s.weight} lbs`:""}{s.height?` @ ${s.height} ${s.height_unit||"in"}`:""}</span>
               <span>
                 <span onClick={()=>startEdit(s)} style={{cursor:"pointer",textDecoration:"underline",fontSize:11,marginRight:10}}>edit</span>
                 <span onClick={()=>onDelSet(s.id)} style={{cursor:"pointer",textDecoration:"underline",fontSize:11}}>remove</span>
@@ -409,6 +411,7 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet, onAddSet
               <>
                 <input type="number" value={addVals.reps} onChange={e=>setAddVals(v=>({...v,reps:e.target.value}))} placeholder="reps" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
                 <input type="number" value={addVals.weight} onChange={e=>setAddVals(v=>({...v,weight:e.target.value}))} placeholder="lbs" style={{width:55,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
+                <input type="number" value={addVals.height} onChange={e=>setAddVals(v=>({...v,height:e.target.value}))} placeholder="height" style={{width:60,background:"var(--bg)",border:"1px solid var(--b1)",borderRadius:5,padding:"3px 6px",color:"var(--txt)",fontSize:12}}/>
               </>
             )}
             <span onClick={savingNewSet?undefined:saveNewSet} style={{cursor:savingNewSet?"default":"pointer",color:"var(--teal2)",fontWeight:700,fontSize:11,opacity:savingNewSet?0.6:1}}>{savingNewSet?"Adding…":"Add"}</span>
@@ -746,7 +749,7 @@ function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan, startRestTi
     <div style={{background:done?"rgba(45,186,128,0.08)":"var(--s2)",border:"1px solid "+(done?"rgba(45,186,128,0.2)":"var(--b1)"),borderLeft:"3px solid "+(done?"var(--green)":"var(--gold)"),borderRadius:7,padding:"10px 12px",marginBottom:6,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}{ex.type==="time"&&<span style={{fontSize:9,color:"var(--gold)",background:"rgba(201,168,76,0.15)",borderRadius:3,padding:"1px 5px",marginLeft:4}}>TIME</span>}</div>
-        <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.each_side?" each":""}{ex.weight?" @ "+ex.weight+" lbs":""}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
+        <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.each_side?" each":""}{ex.weight?" @ "+ex.weight+" lbs":""}{ex.height?" @ "+ex.height+" in":""}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
         {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
       </div>
       {vidUrl&&<ExerciseVideo url={vidUrl}/>}
@@ -781,7 +784,7 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
 
   const [showLogForm, setShowLogForm] = React.useState(false);
   const [loggingGi, setLoggingGi] = React.useState(null);
-  const blankBlock = () => ({exercise:"", muscle:"Full Body", type:"reps", setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]});
+  const blankBlock = () => ({exercise:"", muscle:"Full Body", type:"reps", heightEnabled:false, setRows:[{reps:"",weight:"",height:""},{reps:"",weight:"",height:""},{reps:"",weight:"",height:""}]});
   const [logEf, setLogEf] = React.useState({blocks:[blankBlock()],notes:"",date:today,from_plan:false,exerciseGroup:null});
 
   React.useEffect(()=>{ setShowLogForm(false); setLoggingGi(null); },[selDate]);
@@ -793,7 +796,8 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
       const isTime = e.type === "time";
       const repsDefault = !isTime && /^\d+$/.test(String(e.reps||"").trim()) ? String(e.reps).trim() : "";
       const weightDefault = e.weight ? String(e.weight) : "";
-      return { exercise:e.name, muscle:e.muscle||"Full Body", type: isTime?"time":"reps", setRows: Array.from({length:n}, ()=>({reps:repsDefault, weight:weightDefault})) };
+      const heightDefault = e.height ? String(e.height) : "";
+      return { exercise:e.name, muscle:e.muscle||"Full Body", type: isTime?"time":"reps", heightEnabled: !!e.height, setRows: Array.from({length:n}, ()=>({reps:repsDefault, weight:weightDefault, height:heightDefault})) };
     });
     setLogEf({blocks, notes:"", date:selDate||today, from_plan:true, exerciseGroup: ex.group||null});
     setShowLogForm(true);
@@ -808,7 +812,7 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
   const updateLogSetRow = (bi,i,key,val) => {
     setLogEf(p=>{ const blocks=[...p.blocks]; const rows=[...blocks[bi].setRows]; rows[i]={...rows[i],[key]:val}; blocks[bi]={...blocks[bi],setRows:rows}; return {...p,blocks}; });
   };
-  const addLogSetRow = (bi) => setLogEf(p=>{ const blocks=[...p.blocks]; blocks[bi]={...blocks[bi],setRows:[...blocks[bi].setRows,{reps:"",weight:""}]}; return {...p,blocks}; });
+  const addLogSetRow = (bi) => setLogEf(p=>{ const blocks=[...p.blocks]; blocks[bi]={...blocks[bi],setRows:[...blocks[bi].setRows,{reps:"",weight:"",height:""}]}; return {...p,blocks}; });
   const removeLogSetRow = (bi,i) => setLogEf(p=>{ const blocks=[...p.blocks]; blocks[bi]={...blocks[bi],setRows:blocks[bi].setRows.filter((_,idx)=>idx!==i)}; return {...p,blocks}; });
 
   const submitLog = async () => {
@@ -847,6 +851,7 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
                     </div>
                   )}
                   <label style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={!!block.eachSide} onChange={e=>updateLogBlockField(bi,"eachSide",e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Each side</span></label>
+                  <label style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={!!block.heightEnabled} onChange={e=>updateLogBlockField(bi,"heightEnabled",e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Track height (box jumps, step-ups, etc.)</span></label>
                   <div style={{fontFamily:"Barlow Condensed",fontSize:9,color:"var(--muted)",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Sets</div>
                   {block.setRows.map((row,i)=>(
                     <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
@@ -855,6 +860,8 @@ function ClientCalendar({calMonth,calYear,setCalMonth,setCalYear,selDate,setSelD
                         style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>
                       <input type="number" inputMode="decimal" placeholder="Weight" value={row.weight} onChange={e=>updateLogSetRow(bi,i,"weight",e.target.value)}
                         style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>
+                      {block.heightEnabled&&<input type="number" inputMode="decimal" placeholder="Height (in)" value={row.height} onChange={e=>updateLogSetRow(bi,i,"height",e.target.value)}
+                        style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>}
                       {block.setRows.length>1&&<button onClick={()=>removeLogSetRow(bi,i)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0}}>✕</button>}
                     </div>
                   ))}
@@ -2761,7 +2768,7 @@ function App(){
   const [checked,setChecked] = useState({});
   const [planExToLog,setPEL] = useState(null);
 
-  const [ef,setEf] = useState({date:tod(),blocks:[{exercise:"",muscle:"Chest",type:"reps",setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]}],notes:"",from_plan:false,exerciseGroup:null});
+  const [ef,setEf] = useState({date:tod(),blocks:[{exercise:"",muscle:"Chest",type:"reps",setRows:[{reps:"",weight:"",height:""},{reps:"",weight:"",height:""},{reps:"",weight:"",height:""}]}],notes:"",from_plan:false,exerciseGroup:null});
   const [pf,setPf] = useState({date:tod(),weight:"",bf:"",notes:"",waist:"",chest:"",arms:"",hips:"",thighs:"",visceralFat:"",muscleMass:"",hangTime:"",vo2Max:"",hrv:"",restingHeartRate:""});
   const [pin,setPin] = useState(["","","",""]);
   const pinRefs = [useRef(),useRef(),useRef(),useRef()];
@@ -2857,6 +2864,7 @@ function App(){
           distance: isDistance ? (r.reps||null) : null,
           distance_unit: isDistance ? (b.unit||"mi") : null,
           weight:r.weight||"", muscle:b.muscle||"Full Body",
+          height: b.heightEnabled ? (r.height||null) : null, height_unit: b.heightEnabled ? "in" : null,
           notes:data.notes||"", date:data.date||new Date().toISOString().slice(0,10), from_plan:data.from_plan||false,
           exercise_group: groupId, log_type: b.type||"reps", each_side: !!b.eachSide
         });
@@ -2873,7 +2881,7 @@ function App(){
       setLogs(fresh);
     } catch(e){ /* non-fatal — history list just won't refresh immediately */ }
     if(!overrideData){
-      setEf({blocks:[{exercise:"",muscle:"Chest",setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]}],notes:"",date:tod(),from_plan:false,exerciseGroup:null});
+      setEf({blocks:[{exercise:"",muscle:"Chest",setRows:[{reps:"",weight:"",height:""},{reps:"",weight:"",height:""},{reps:"",weight:"",height:""}]}],notes:"",date:tod(),from_plan:false,exerciseGroup:null});
       setSAE(false); setPEL(null);
     }
     toast_("Logged ✓ ("+payload.length+" set"+(payload.length!==1?"s":"")+")");
@@ -2906,7 +2914,9 @@ function App(){
       reps: isDistance ? null : (vals.reps?+vals.reps:null),
       weight: (isTime||isDistance) ? null : (vals.weight?+vals.weight:null),
       distance: isDistance ? (vals.distance?+vals.distance:null) : null,
-      distance_unit: isDistance ? vals.distance_unit : null
+      distance_unit: isDistance ? vals.distance_unit : null,
+      height: (isTime||isDistance) ? null : (vals.height?+vals.height:null),
+      height_unit: (isTime||isDistance) ? null : (vals.height ? "in" : null)
     };
     try {
       const [saved] = await api("workout_logs",{method:"POST",body:JSON.stringify(payload)});
@@ -2952,20 +2962,21 @@ function App(){
     const isTime = ex.type === "time";
     const repsDefault = !isTime && /^\d+$/.test(String(ex.reps||"").trim()) ? String(ex.reps).trim() : "";
     const weightDefault = ex.weight ? String(ex.weight) : "";
-    const rows = Array.from({length:n}, ()=>({reps:repsDefault, weight:weightDefault}));
-    setEf({date:tod(),blocks:[{exercise:ex.name,muscle:ex.muscle||"Full Body",type:isTime?"time":"reps",setRows:rows}],notes:"",from_plan:true,exerciseGroup:null});
+    const heightDefault = ex.height ? String(ex.height) : "";
+    const rows = Array.from({length:n}, ()=>({reps:repsDefault, weight:weightDefault, height:heightDefault}));
+    setEf({date:tod(),blocks:[{exercise:ex.name,muscle:ex.muscle||"Full Body",type:isTime?"time":"reps",heightEnabled:!!ex.height,setRows:rows}],notes:"",from_plan:true,exerciseGroup:null});
     setPEL(ex); setSAE(true);
   };
 
   const updateEfBlockField = (bi,key,val) => {
     setEf(p=>{ const blocks=[...p.blocks]; blocks[bi]={...blocks[bi],[key]:val}; return {...p,blocks}; });
   };
-  const addEfBlock = () => setEf(p=>({...p,blocks:[...p.blocks,{exercise:"",muscle:"Chest",type:"reps",setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]}]}));
+  const addEfBlock = () => setEf(p=>({...p,blocks:[...p.blocks,{exercise:"",muscle:"Chest",type:"reps",setRows:[{reps:"",weight:"",height:""},{reps:"",weight:"",height:""},{reps:"",weight:"",height:""}]}]}));
   const removeEfBlock = (bi) => setEf(p=>({...p,blocks:p.blocks.filter((_,idx)=>idx!==bi)}));
   const updateSetRow = (bi,i,key,val) => {
     setEf(p=>{ const blocks=[...p.blocks]; const rows=[...blocks[bi].setRows]; rows[i]={...rows[i],[key]:val}; blocks[bi]={...blocks[bi],setRows:rows}; return {...p,blocks}; });
   };
-  const addSetRow = (bi) => setEf(p=>{ const blocks=[...p.blocks]; blocks[bi]={...blocks[bi],setRows:[...blocks[bi].setRows,{reps:"",weight:""}]}; return {...p,blocks}; });
+  const addSetRow = (bi) => setEf(p=>{ const blocks=[...p.blocks]; blocks[bi]={...blocks[bi],setRows:[...blocks[bi].setRows,{reps:"",weight:"",height:""}]}; return {...p,blocks}; });
   const removeSetRow = (bi,i) => setEf(p=>{ const blocks=[...p.blocks]; blocks[bi]={...blocks[bi],setRows:blocks[bi].setRows.filter((_,idx)=>idx!==i)}; return {...p,blocks}; });
 
   const todayLogs = logs.filter(e=>e.date===tod());
@@ -3417,7 +3428,7 @@ function App(){
         </div>
       )}
 
-      {(view==="log"||view==="today")&&<button className="fab" onClick={()=>{setEf({date:tod(),blocks:[{exercise:"",muscle:"Chest",type:"reps",setRows:[{reps:"",weight:""},{reps:"",weight:""},{reps:"",weight:""}]}],notes:"",from_plan:false,exerciseGroup:null});setPEL(null);setSAE(true);}}>＋</button>}
+      {(view==="log"||view==="today")&&<button className="fab" onClick={()=>{setEf({date:tod(),blocks:[{exercise:"",muscle:"Chest",type:"reps",setRows:[{reps:"",weight:"",height:""},{reps:"",weight:"",height:""},{reps:"",weight:"",height:""}]}],notes:"",from_plan:false,exerciseGroup:null});setPEL(null);setSAE(true);}}>＋</button>}
       {view==="progress"&&<button className="fab" onClick={()=>setSProg(true)}>＋</button>}
 
       <div className="bnav">
@@ -3460,6 +3471,7 @@ function App(){
                   </div>
                 )}
                 <label style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={!!block.eachSide} onChange={e=>updateEfBlockField(bi,"eachSide",e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Each side</span></label>
+                <label style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={!!block.heightEnabled} onChange={e=>updateEfBlockField(bi,"heightEnabled",e.target.checked)} style={{width:14,height:14}}/><span style={{fontSize:11,color:"var(--muted)"}}>Track height (box jumps, step-ups, etc.)</span></label>
                 <div style={{fontFamily:"Barlow Condensed",fontSize:9,color:"var(--muted)",letterSpacing:1,textTransform:"uppercase",marginBottom:5,marginTop:8}}>Sets</div>
                 {block.setRows.map((row,i)=>(
                   <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
@@ -3468,6 +3480,8 @@ function App(){
                       style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>
                     <input type="number" inputMode="decimal" placeholder="Weight" value={row.weight} onChange={e=>updateSetRow(bi,i,"weight",e.target.value)}
                       style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>
+                    {block.heightEnabled&&<input type="number" inputMode="decimal" placeholder="Height (in)" value={row.height} onChange={e=>updateSetRow(bi,i,"height",e.target.value)}
+                      style={{flex:1,minWidth:0,background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:7,padding:9,color:"var(--txt)",fontFamily:"Barlow",fontSize:13,outline:"none"}}/>}
                     {block.setRows.length>1&&<button onClick={()=>removeSetRow(bi,i)} style={{background:"transparent",border:"none",color:"var(--muted)",fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0}}>✕</button>}
                   </div>
                 ))}
