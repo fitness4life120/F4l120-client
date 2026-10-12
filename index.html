@@ -301,7 +301,13 @@ function normalizeExName(name) {
 }
 var INVERTED_PR_EXERCISES = new Set(["assisted dip", "assisted pull up"]);
 function isInvertedPRExercise(name) {
-  return INVERTED_PR_EXERCISES.has(normalizeExName(name));
+  // Assisted lifts (less assistance = better) and depth drops (a fall, not a climb: opposite of box jumps)
+  return INVERTED_PR_EXERCISES.has(normalizeExName(name)) || /depth (drop|jump)/.test(normalizeExName(name));
+}
+function prValueOf(l){ // weight if used, otherwise height (box jumps, depth drops)
+  if(+l.weight>0) return {v:+l.weight, unit:"lbs"};
+  if(+l.height>0) return {v:+l.height, unit:l.height_unit||"in"};
+  return null;
 }
 
 function getExercisePR(logs, exerciseName){
@@ -310,9 +316,10 @@ function getExercisePR(logs, exerciseName){
   const targetNorm = normalizeExName(exerciseName);
   (logs||[]).forEach(l=>{
     if(normalizeExName(l.exercise)!==targetNorm) return;
-    const w = +l.weight||0;
-    if(w<=0) return;
-    if(!best || (inverted ? w<best.weight : w>best.weight)) best = {weight:w, reps:l.reps, log_type:l.log_type};
+    const pv = prValueOf(l);
+    if(!pv) return;
+    const w = pv.v;
+    if(!best || (inverted ? w<best.weight : w>best.weight)) best = {weight:w, reps:l.reps, log_type:l.log_type, unit:pv.unit};
   });
   return best;
 }
@@ -471,7 +478,7 @@ function ExGroupCard({group, exerciseVideos, logs, onDelSet, onEditSet, onAddSet
         {group.notes&&<span style={{fontSize:10,color:"var(--soft)",fontStyle:"italic"}}>{group.notes}</span>}
         {vidUrl&&<ExerciseVideo url={vidUrl}/>}
       </div>
-      {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:4,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
+      {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:4,fontWeight:700}}>🏆 PR: {pr.weight} {pr.unit||"lbs"} × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
     </div>
   );
 }
@@ -495,7 +502,7 @@ function ExRow({e,onDel,exerciseVideos,logs}){
         {e.notes&&<span style={{fontSize:10,color:"var(--soft)",fontStyle:"italic"}}>{e.notes}</span>}
         {vidUrl&&<ExerciseVideo url={vidUrl}/>}
       </div>
-      {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:4,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
+      {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:4,fontWeight:700}}>🏆 PR: {pr.weight} {pr.unit||"lbs"} × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
     </div>
   );
 }
@@ -794,7 +801,7 @@ function ExPlanCard({ex, logs, selDate, exerciseVideos, logFromPlan, startRestTi
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}{ex.type==="time"&&<span style={{fontSize:9,color:"var(--gold)",background:"rgba(201,168,76,0.15)",borderRadius:3,padding:"1px 5px",marginLeft:4}}>TIME</span>}</div>
         <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{ex.sets} sets × {ex.reps}{ex.type==="time"?"":" reps"}{ex.each_side?" each":""}{ex.weight?" @ "+ex.weight+" lbs":""}{ex.height?" @ "+ex.height+" in":""}{ex.muscle?" · "+ex.muscle:""}{ex.rest?" · Rest "+ex.rest:""}</div>
-        {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} lbs × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
+        {pr&&<div style={{fontSize:10,color:"var(--gold)",marginTop:2,fontWeight:700}}>🏆 PR: {pr.weight} {pr.unit||"lbs"} × {pr.reps}{pr.log_type==="time"?" sec":""}</div>}
       </div>
       {vidUrl&&<ExerciseVideo url={vidUrl}/>}
       {ex.rest&&parseRestSeconds(ex.rest)&&<button onClick={()=>startRestTimer(parseRestSeconds(ex.rest),ex.name)} style={{background:"var(--s1)",border:"1px solid var(--b1)",color:"var(--muted)",borderRadius:6,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Barlow Condensed",letterSpacing:0.5}}>⏱ Rest</button>}
@@ -3439,11 +3446,12 @@ function App(){
             <div className="clbl">Personal Records</div>
             <input placeholder="🔍 Search exercises…" value={prSearch} onChange={e=>setPrSearch(e.target.value)} style={{background:"var(--bg)",border:"1.5px solid var(--b1)",borderRadius:8,padding:10,color:"var(--txt)",fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:13,outline:"none",width:"100%",marginBottom:10}}/>
             {(()=>{
-              const b={};
+              const b={}, bu={};
               logs.forEach(e=>{
-                if(!e.weight) return;
+                const pv = prValueOf(e);
+                if(!pv) return;
                 const inverted = isInvertedPRExercise(e.exercise);
-                if(!b[e.exercise] || (inverted ? +e.weight<+b[e.exercise] : +e.weight>+b[e.exercise])) b[e.exercise]=e.weight;
+                if(!b[e.exercise] || (inverted ? pv.v<+b[e.exercise] : pv.v>+b[e.exercise])){ b[e.exercise]=pv.v; bu[e.exercise]=pv.unit; }
               });
               const q = prSearch.trim().toLowerCase();
               let ent = Object.entries(b).sort((a,c_)=>c_[1]-a[1]);
@@ -3451,7 +3459,7 @@ function App(){
               return ent.length?ent.map(([ex,w])=>(
                 <div key={ex} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid var(--b1)"}}>
                   <span style={{fontSize:13,fontWeight:500}}>{ex}</span>
-                  <span style={{fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,color:"var(--teal2)"}}>{w} lbs</span>
+                  <span style={{fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,color:"var(--teal2)"}}>{w} {bu[ex]||"lbs"}</span>
                 </div>
               )):<div style={{color:"var(--muted)",fontSize:12,fontStyle:"italic"}}>{q?"No matching exercises":"No PRs yet"}</div>;
             })()}
