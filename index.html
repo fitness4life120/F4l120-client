@@ -166,34 +166,23 @@ function mergeCustomExercises(rows){
 EX_BUILTIN.sort((a,b)=>a.name.localeCompare(b.name)); EX_LIB = EX_BUILTIN.slice();
 function ExPicker({value,onChange,onPick,placeholder,inputStyle}){
   const [open,setOpen] = React.useState(false);
-  const [cat,setCat] = React.useState("");
-  const cats = ["Chest","Back","Shoulders","Biceps","Triceps","Legs","Glutes","Core","Cardio","Full Body"];
-  const q = (value||"").trim().toLowerCase();
-  let res = EX_LIB;
-  if(cat) res = res.filter(e=>e.category===cat);
-  if(q) res = res.filter(e=>e.name.toLowerCase().includes(q)).sort((a,b)=>(a.name.toLowerCase().startsWith(q)?0:1)-(b.name.toLowerCase().startsWith(q)?0:1));
-  const shown = res.slice(0,40);
   const closeT = React.useRef(null);
+  const q = (value||"").trim().toLowerCase();
+  const matches = q.length<2 ? [] : EX_LIB.filter(e=>e.name.toLowerCase().includes(q)).sort((a,b)=>(a.name.toLowerCase().startsWith(q)?0:1)-(b.name.toLowerCase().startsWith(q)?0:1)).slice(0,8);
   return (
     <div style={{position:"relative",flex:1,minWidth:0}}>
       <input placeholder={placeholder||"Exercise name"} value={value} autoComplete="off"
         onFocus={()=>{clearTimeout(closeT.current);setOpen(true);}}
         onBlur={()=>{closeT.current=setTimeout(()=>setOpen(false),200);}}
         onChange={e=>{onChange(e.target.value);setOpen(true);}} style={inputStyle}/>
-      {open&&(
-        <div onMouseDown={e=>e.preventDefault()} style={{position:"absolute",left:0,right:0,top:"100%",zIndex:60,marginTop:2,background:"var(--card)",border:"1.5px solid var(--b1)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.4)",maxHeight:300,overflowY:"auto"}}>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap",padding:8,borderBottom:"1px solid var(--b1)",position:"sticky",top:0,background:"var(--card)"}}>
-            {cats.map(c=>(
-              <button key={c} type="button" onClick={()=>setCat(cat===c?"":c)} style={{padding:"4px 9px",borderRadius:12,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:cat===c?"var(--teal)":"var(--bg)",color:cat===c?"#fff":"var(--muted)"}}>{c}</button>
-            ))}
-          </div>
-          {shown.map(e=>(
-            <div key={e.name} onClick={()=>{onPick(e.name,e.category);setOpen(false);}} style={{padding:"10px 12px",fontSize:13,cursor:"pointer",borderBottom:"1px solid var(--b1)",display:"flex",justifyContent:"space-between",gap:8}}>
-              <span>{e.name}</span><span style={{fontSize:10,color:"var(--muted)",flexShrink:0}}>{e.category}</span>
+      {open&&matches.length>0&&(
+        <div onMouseDown={e=>e.preventDefault()} style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--s1)",border:"1px solid var(--b1)",borderRadius:"0 0 8px 8px",zIndex:99,maxHeight:200,overflowY:"auto",boxShadow:"0 6px 16px rgba(0,0,0,.5)"}}>
+          {matches.map(e=>(
+            <div key={e.name} onClick={()=>{onPick(e.name,e.category);setOpen(false);}} style={{padding:"10px 12px",fontSize:13,cursor:"pointer",borderBottom:"1px solid var(--b1)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"var(--s1)"}}>
+              <span>{e.name}</span>
+              <span style={{fontSize:10,color:"var(--muted)",background:"var(--s3)",borderRadius:3,padding:"1px 5px",flexShrink:0}}>{e.category}</span>
             </div>
           ))}
-          {!shown.length&&<div style={{padding:12,fontSize:12,color:"var(--muted)"}}>No match in the library{q?` — "${value}" will be logged as typed.`:"."}</div>}
-          {res.length>40&&<div style={{padding:8,fontSize:11,color:"var(--muted)",textAlign:"center"}}>Keep typing to narrow {res.length} results…</div>}
         </div>
       )}
     </div>
