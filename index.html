@@ -2496,6 +2496,17 @@ function FilesTab({client, toast_}){
     } catch(e){ toast_("Could not open file"); }
   };
 
+  // Removes the file from THIS client's Files tab only (deletes the share, not Coach Steve's library copy)
+  const removeResource = async (e, r) => {
+    e.stopPropagation();
+    if(!confirm(`Remove "${r.name}" from your files?`)) return;
+    try {
+      await api(`resource_shares?library_id=eq.${r.id}&client_id=eq.${client.id}`,{method:"DELETE"});
+      setResources(prev=>prev.filter(x=>x.id!==r.id));
+      toast_("File removed");
+    } catch(err){ toast_("Could not remove file"); }
+  };
+
   if(!loaded) return <div className="scroll"><div className="empty">Loading…</div></div>;
 
   if(!resources.length){
@@ -2525,6 +2536,8 @@ function FilesTab({client, toast_}){
               <span style={{fontSize:22}}>{r.file_type==="pdf"?"📄":"📝"}</span>
               <span style={{fontSize:14,fontWeight:600,flex:1}}>{r.name}</span>
               <span style={{fontSize:11,color:"var(--teal2)"}}>Open ›</span>
+              <button onClick={(e)=>removeResource(e,r)} aria-label={`Remove ${r.name}`} title="Remove file"
+                style={{background:"none",border:"none",fontSize:17,padding:"4px 2px 4px 8px",cursor:"pointer",color:"var(--muted, #999)",lineHeight:1}}>🗑</button>
             </div>
           ))}
         </div>
