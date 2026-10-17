@@ -1233,6 +1233,55 @@ function MacroBox({label,value,goal,color}){
   );
 }
 
+
+const GOAL_FIELD = {weight:"weight",body_fat:"body_fat",muscle_mass:"muscle_mass",visceral_fat:"visceral_fat",waist:"waist",vo2_max:"vo2_max",resting_heart_rate:"resting_heart_rate",hrv:"hrv",hang_time_seconds:"hang_time_seconds",grip_strength:"grip_strength",sit_to_stand:"sit_to_stand",balance_sec:"balance_sec",pushups_max:"pushups_max",plank_sec:"plank_sec"};
+function goalInfo(g, prog){
+  let cur = g.current_value!=null ? +g.current_value : null;
+  const f = GOAL_FIELD[g.metric];
+  if(f){
+    const rows = (prog||[]).filter(p=>p[f]!=null && p[f]!=="" && +p[f]>0).sort((x,y)=>String(y.date).localeCompare(String(x.date)));
+    if(rows.length) cur = +rows[0][f];
+  }
+  const start = g.start_value!=null ? +g.start_value : null, target = g.target_value!=null ? +g.target_value : null;
+  const info = {cur, pct:0, status:"In progress", color:"var(--teal2)"};
+  if(start==null || target==null || cur==null){ info.status = cur==null ? "No data yet" : "In progress"; info.color="var(--muted)"; return info; }
+  const up = target>=start;
+  const reached = up ? cur>=target : cur<=target;
+  const pct = start===target ? 1 : (cur-start)/(target-start);
+  info.pct = Math.max(0,Math.min(1,pct));
+  if(reached || g.status==="achieved"){ info.status="Achieved"; info.pct=1; info.color="var(--green)"; return info; }
+  if(g.target_date && g.start_date){
+    const s = new Date(g.start_date+"T12:00:00").getTime(), e = new Date(g.target_date+"T12:00:00").getTime(), n = Date.now();
+    const exp = e>s ? Math.max(0,Math.min(1,(n-s)/(e-s))) : 1;
+    if(n>e){ info.status="Past due"; info.color="var(--red)"; }
+    else if(info.pct>=exp-0.1){ info.status="On track"; info.color="var(--green)"; }
+    else { info.status="Behind"; info.color="var(--gold)"; }
+  }
+  return info;
+}
+const gnum = (n,u) => n==null ? "—" : (Math.round(n*10)/10) + (u?" "+u:"");
+function GoalsCard({goals, progress}){
+  if(!goals||!goals.length) return null;
+  return (
+    <div className="card">
+      <div className="clbl">My 90-Day Goals</div>
+      {goals.map(g=>{
+        const i = goalInfo(g, progress);
+        return (
+          <div key={g.id} style={{padding:"10px 0",borderTop:"1px solid var(--b1)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start"}}>
+              <div style={{fontSize:13,fontWeight:700}}>{g.title}</div>
+              <span style={{fontSize:10,fontWeight:700,color:i.color,whiteSpace:"nowrap"}}>{i.status}</span>
+            </div>
+            <div style={{fontSize:11,color:"var(--muted)",margin:"3px 0 6px"}}>{gnum(+g.start_value,g.unit)} → <strong style={{color:"var(--txt)"}}>{gnum(i.cur,g.unit)}</strong> / target {gnum(+g.target_value,g.unit)}{g.target_date?` · by ${g.target_date}`:""}</div>
+            <div style={{height:6,background:"var(--bg)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.round(i.pct*100)+"%",background:i.color}}/></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProgressPhotoGallery({client, photos, setPhotos, toast_}){
   const [showForm,setShowForm] = useState(false);
   const [angle,setAngle] = useState("Front");
@@ -1320,6 +1369,17 @@ function ProgressPhotoGallery({client, photos, setPhotos, toast_}){
         </div>
       )}
 
+      {["Front","Side","Back"].filter(ang=>photos.filter(p=>p.angle===ang).length>=2).length>0&&(
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:12}}>
+          <span style={{fontSize:11,color:"var(--muted)",fontWeight:700}}>First vs Latest:</span>
+          {["Front","Side","Back"].filter(ang=>photos.filter(p=>p.angle===ang).length>=2).map(ang=>(
+            <button key={ang} onClick={()=>{
+              const list = photos.filter(p=>p.angle===ang).sort((x,y)=>new Date(x.date)-new Date(y.date));
+              setSelected([list[0].id, list[list.length-1].id]); setCompareOpen(true);
+            }} style={{background:"var(--teal3)",border:"1px solid var(--teal)",color:"var(--teal2)",borderRadius:14,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{ang}</button>
+          ))}
+        </div>
+      )}
       {selected.length===2&&(
         <button onClick={()=>setCompareOpen(true)} style={{width:"100%",background:"var(--teal)",color:"#fff",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:12}}>Compare Selected Photos</button>
       )}
@@ -2766,6 +2826,7 @@ function App(){
   const [toast,setToast]     = useState(null);
   const [logs,setLogs]       = useState([]);
   const [progress,setProg]   = useState([]);
+  const [goals,setGoals] = useState([]);
   const [stepsLogs,setStepsLogs] = useState([]);
   const [stepsPeriod,setStepsPeriod] = useState("weekly");
   const [prSearch,setPrSearch] = useState("");
@@ -2851,8 +2912,10 @@ function App(){
         api(`progress_photos?client_id=eq.${id}&order=date.desc`),
         api(`optional_workouts?client_id=eq.${id}&order=created_at.desc`),
         api(`water_logs?client_id=eq.${id}&order=date.asc`),
+        api(`client_goals?client_id=eq.${id}&order=created_at.asc`).catch(()=>[]),
       ]);
-      const [l,pr,pl,dp,tn,msgs,habs,habLogs,photos,optWorkouts,waterData] = results;
+      const [l,pr,pl,dp,tn,msgs,habs,habLogs,photos,optWorkouts,waterData,goalRows] = results;
+      setGoals(goalRows||[]);
       setClient(cCheck[0]); setLogs(l); setProg(pr); setPlans(pl); setDatedPlans(dp||[]);
       setTNote(tn[0]?.message||"");
       setMessages(msgs||[]);
@@ -3295,6 +3358,7 @@ function App(){
       {/* PROGRESS */}
       {view==="progress"&&(
         <div className="scroll">
+          <GoalsCard goals={goals} progress={progress}/>
           <ProgressPhotoGallery client={client} photos={progressPhotos} setPhotos={setProgressPhotos} toast_={toast_}/>
           {latestP&&(
             <div className="card" style={{textAlign:"center",padding:"18px 14px"}}>
